@@ -1,0 +1,69 @@
+package market
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type Status string
+
+const (
+	StatusOpen      Status = "open"
+	StatusClosed    Status = "closed"
+	StatusResolved  Status = "resolved"
+	StatusDisputed  Status = "disputed"
+	StatusCancelled Status = "cancelled"
+)
+
+type Outcome string
+
+const (
+	OutcomeYes       Outcome = "yes"
+	OutcomeNo        Outcome = "no"
+	OutcomeCancelled Outcome = "cancelled"
+)
+
+type Category string
+
+const (
+	CategoryPeople     Category = "people"
+	CategoryOKRs       Category = "okrs"
+	CategorySLAs       Category = "slas"
+	CategoryFinancials Category = "financials"
+	CategoryGeneral    Category = "general"
+)
+
+var ValidCategories = map[Category]bool{
+	CategoryPeople: true, CategoryOKRs: true,
+	CategorySLAs: true, CategoryFinancials: true, CategoryGeneral: true,
+}
+
+type Market struct {
+	ID               uuid.UUID  `json:"id"`
+	Question         string     `json:"question"`
+	Description      string     `json:"description"`
+	Category         Category   `json:"category"`
+	CreatorID        uuid.UUID  `json:"creator_id"`
+	ResolverID       uuid.UUID  `json:"resolver_id"`
+	Status           Status     `json:"status"`
+	Outcome          *Outcome   `json:"outcome,omitempty"`
+	EvidenceURL      *string    `json:"evidence_url,omitempty"`
+	InitialLiquidity int64      `json:"initial_liquidity"`
+	ClosesAt         time.Time  `json:"closes_at"`
+	ResolvesAt       time.Time  `json:"resolves_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
+	DisputeDeadline  *time.Time `json:"dispute_deadline,omitempty"`
+	// Live pricing from pool
+	YesPrice float64 `json:"yes_price"`
+	NoPrice  float64 `json:"no_price"`
+}
+
+type Pool struct {
+	MarketID        uuid.UUID
+	YesReserve      float64
+	NoReserve       float64
+	K               float64
+	TotalCollateral int64
+}
