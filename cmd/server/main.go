@@ -64,31 +64,11 @@ func main() {
 	r.Use(requestLogger(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
+	registerRoutes(r, jwtSecret, hub, userHandler, marketHandler, tradeHandler)
 
-	// Public
-	r.Post("/auth/register", userHandler.Register)
-	r.Post("/auth/login", userHandler.Login)
-	r.Get("/ws", ws.Handler(hub, jwtSecret, allowedOrigins()))
-
-	// Authenticated
-	r.Group(func(r chi.Router) {
-		r.Use(auth.Middleware(jwtSecret))
-
-		r.Get("/me", userHandler.Me)
-		r.Get("/users", userHandler.List)
-
-		r.Get("/markets", marketHandler.List)
-		r.With(auth.AdminOnly).Get("/admin/disputes", marketHandler.ListDisputes)
-		r.Post("/markets", marketHandler.Create)
-		r.Get("/markets/{id}", marketHandler.Get)
-		r.Post("/markets/{id}/resolve", marketHandler.Resolve)
-		r.Post("/markets/{id}/dispute", marketHandler.Dispute)
-		r.With(auth.AdminOnly).Post("/markets/{id}/review-dispute", marketHandler.ReviewDispute)
-
-		r.Post("/markets/{id}/trade", tradeHandler.Trade)
-		r.Get("/markets/{id}/trades", tradeHandler.MarketTrades)
-		r.Get("/positions", tradeHandler.MyPositions)
-	})
+	apiRouter := chi.NewRouter()
+	registerRoutes(apiRouter, jwtSecret, hub, userHandler, marketHandler, tradeHandler)
+	r.Mount("/api", apiRouter)
 
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {
@@ -119,4 +99,29 @@ func main() {
 		os.Exit(1)
 	}
 	hub.Shutdown()
+}
+
+func registerRoutes(r chi.Router, jwtSecret string, hub *ws.Hub, userHandler *user.Handler, marketHandler *market.Handler, tradeHandler *trade.Handler) {
+	r.Post("/auth/register", userHandler.Register)
+	r.Post("/auth/login", userHandler.Login)
+	r.Get("/ws", ws.Handler(hub, jwtSecret, allowedOrigins()))
+
+	r.Group(func(r chi.Router) {
+		r.Use(auth.Middleware(jwtSecret))
+
+		r.Get("/me", userHandler.Me)
+		r.Get("/users", userHandler.List)
+
+		r.Get("/markets", marketHandler.List)
+		r.With(auth.AdminOnly).Get("/admin/disputes", marketHandler.ListDisputes)
+		r.Post("/markets", marketHandler.Create)
+		r.Get("/markets/{id}", marketHandler.Get)
+		r.Post("/markets/{id}/resolve", marketHandler.Resolve)
+		r.Post("/markets/{id}/dispute", marketHandler.Dispute)
+		r.With(auth.AdminOnly).Post("/markets/{id}/review-dispute", marketHandler.ReviewDispute)
+
+		r.Post("/markets/{id}/trade", tradeHandler.Trade)
+		r.Get("/markets/{id}/trades", tradeHandler.MarketTrades)
+		r.Get("/positions", tradeHandler.MyPositions)
+	})
 }

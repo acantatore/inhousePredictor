@@ -6,13 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/auth': 'http://localhost:8080',
-      '/me': 'http://localhost:8080',
-      '/markets': 'http://localhost:8080',
-      '/positions': 'http://localhost:8080',
-      '/users': 'http://localhost:8080',
-      '/admin': 'http://localhost:8080',
-      '/ws': {
+      '/api': 'http://localhost:8080',
+      '/api/ws': {
         target: 'ws://localhost:8080',
         ws: true,
       },
