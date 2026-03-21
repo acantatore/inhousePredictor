@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/naranjax/inhousepredictor/internal/httpx"
@@ -45,4 +46,8 @@ func (s *Service) Authenticate(ctx context.Context, email, password string) (*Us
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+func (s *Service) List(ctx context.Context, query string, limit int) ([]*Summary, error) {
+	return s.repo.List(ctx, strings.TrimSpace(query), limit)
 }

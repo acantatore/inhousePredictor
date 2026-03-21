@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -62,4 +63,36 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 	return u, nil
+}
+
+func (r *Repository) List(ctx context.Context, query string, limit int) ([]*Summary, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	search := strings.TrimSpace(query)
+	if search != "" {
+		search = "%" + search + "%"
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT id, name, email, is_admin
+		FROM users
+		WHERE ($1 = '' OR name ILIKE $1 OR email ILIKE $1)
+		ORDER BY LOWER(name) ASC, LOWER(email) ASC
+		LIMIT $2
+	`, search, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*Summary
+	for rows.Next() {
+		user := &Summary{}
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.IsAdmin); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, user)
+	}
+	return users, rows.Err()
 }

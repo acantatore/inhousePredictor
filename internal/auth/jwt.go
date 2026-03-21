@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -9,6 +11,8 @@ import (
 )
 
 var ErrInvalidToken = errors.New("invalid token")
+
+const CookieName = "inhousepredictor_token"
 
 type Claims struct {
 	UserID  uuid.UUID `json:"user_id"`
@@ -44,4 +48,38 @@ func ParseToken(tokenStr, secret string) (*Claims, error) {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil
+}
+
+func TokenFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+		return token
+	}
+
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(header, "Bearer ") {
+		if token := strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")); token != "" {
+			return token
+		}
+	}
+
+	cookie, err := r.Cookie(CookieName)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cookie.Value)
+}
+
+func SetTokenCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     CookieName,
+		Value:    token,
+		Path:     "/",
+		Expires:  expiresAt,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }

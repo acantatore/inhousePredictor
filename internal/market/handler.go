@@ -169,3 +169,16 @@ func (h *Handler) ReviewDispute(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "dispute reviewed"})
 }
+
+func (h *Handler) ListDisputes(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsAdminFromContext(r.Context()) {
+		httpx.WriteError(w, httpx.NewError(http.StatusForbidden, httpx.CodeForbidden, "Forbidden.", nil))
+		return
+	}
+	disputes, err := h.svc.ListDisputes(r.Context())
+	if err != nil {
+		httpx.WriteError(w, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, "Internal server error.", err))
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, disputes)
+}

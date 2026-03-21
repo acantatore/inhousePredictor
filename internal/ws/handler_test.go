@@ -42,6 +42,33 @@ func TestWebsocketHandlerRejectsDisallowedOrigin(t *testing.T) {
 	require.Equal(t, 403, res.Code)
 }
 
+func TestWebsocketHandlerAllowsTokenQueryParam(t *testing.T) {
+	hub := NewHub()
+	secret := "secret"
+	token, err := auth.NewToken(uuid.New(), false, secret)
+	require.NoError(t, err)
+	req := httptest.NewRequest("GET", "/ws?token="+token, nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	res := httptest.NewRecorder()
+
+	Handler(hub, secret, map[string]struct{}{"http://localhost:3000": {}})(res, req)
+	require.NotEqual(t, 401, res.Code)
+}
+
+func TestWebsocketHandlerAllowsAuthCookie(t *testing.T) {
+	hub := NewHub()
+	secret := "secret"
+	token, err := auth.NewToken(uuid.New(), false, secret)
+	require.NoError(t, err)
+	req := httptest.NewRequest("GET", "/ws", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	res := httptest.NewRecorder()
+
+	Handler(hub, secret, map[string]struct{}{"http://localhost:3000": {}})(res, req)
+	require.NotEqual(t, 401, res.Code)
+}
+
 func TestWebsocketHandlerAcceptsAuthenticatedConnectionAndBroadcasts(t *testing.T) {
 	hub := NewHub()
 	ctx, cancel := context.WithCancel(context.Background())

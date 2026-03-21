@@ -75,8 +75,10 @@ func main() {
 		r.Use(auth.Middleware(jwtSecret))
 
 		r.Get("/me", userHandler.Me)
+		r.Get("/users", userHandler.List)
 
 		r.Get("/markets", marketHandler.List)
+		r.With(auth.AdminOnly).Get("/admin/disputes", marketHandler.ListDisputes)
 		r.Post("/markets", marketHandler.Create)
 		r.Get("/markets/{id}", marketHandler.Get)
 		r.Post("/markets/{id}/resolve", marketHandler.Resolve)

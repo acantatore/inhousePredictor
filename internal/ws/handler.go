@@ -2,7 +2,6 @@ package ws
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/naranjax/inhousepredictor/internal/auth"
@@ -22,12 +21,12 @@ func Handler(hub *Hub, secret string, allowedOrigins map[string]struct{}) http.H
 			httpx.WriteError(w, httpx.NewError(http.StatusForbidden, httpx.CodeForbidden, "Forbidden.", nil))
 			return
 		}
-		header := r.Header.Get("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
+		token := auth.TokenFromRequest(r)
+		if token == "" {
 			httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", nil))
 			return
 		}
-		if _, err := auth.ParseToken(strings.TrimPrefix(header, "Bearer "), secret); err != nil {
+		if _, err := auth.ParseToken(token, secret); err != nil {
 			httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", err))
 			return
 		}

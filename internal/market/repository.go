@@ -69,16 +69,18 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 	p := &Pool{}
 	err := r.db.QueryRow(ctx, `
 		SELECT m.id, m.question, m.description, m.category,
-		       m.creator_id, m.resolver_id, m.status, m.outcome, m.evidence_url,
+		       m.creator_id, creator.name, m.resolver_id, resolver.name, m.status, m.outcome, m.evidence_url,
 		       m.initial_liquidity, m.closes_at, m.resolves_at, m.created_at,
 		       m.resolved_at, m.dispute_deadline,
 		       p.yes_reserve, p.no_reserve, p.total_collateral
 		FROM markets m
+		JOIN users creator ON creator.id = m.creator_id
+		JOIN users resolver ON resolver.id = m.resolver_id
 		JOIN pools p ON p.market_id = m.id
 		WHERE m.id = $1
 	`, id).Scan(
 		&m.ID, &m.Question, &m.Description, &m.Category,
-		&m.CreatorID, &m.ResolverID, &m.Status, &m.Outcome, &m.EvidenceURL,
+		&m.CreatorID, &m.CreatorName, &m.ResolverID, &m.ResolverName, &m.Status, &m.Outcome, &m.EvidenceURL,
 		&m.InitialLiquidity, &m.ClosesAt, &m.ResolvesAt, &m.CreatedAt,
 		&m.ResolvedAt, &m.DisputeDeadline,
 		&p.YesReserve, &p.NoReserve, &p.TotalCollateral,
@@ -98,11 +100,13 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 	}
 	rows, err := r.db.Query(ctx, `
 		SELECT m.id, m.question, m.description, m.category,
-		       m.creator_id, m.resolver_id, m.status, m.outcome, m.evidence_url,
+		       m.creator_id, creator.name, m.resolver_id, resolver.name, m.status, m.outcome, m.evidence_url,
 		       m.initial_liquidity, m.closes_at, m.resolves_at, m.created_at,
 		       m.resolved_at, m.dispute_deadline,
 		       p.yes_reserve, p.no_reserve
 		FROM markets m
+		JOIN users creator ON creator.id = m.creator_id
+		JOIN users resolver ON resolver.id = m.resolver_id
 		JOIN pools p ON p.market_id = m.id
 		WHERE ($1 = '' OR m.category = $1::market_category)
 		  AND ($2 = '' OR m.status   = $2::market_status)
@@ -120,7 +124,7 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 		var yr, nr float64
 		if err := rows.Scan(
 			&m.ID, &m.Question, &m.Description, &m.Category,
-			&m.CreatorID, &m.ResolverID, &m.Status, &m.Outcome, &m.EvidenceURL,
+			&m.CreatorID, &m.CreatorName, &m.ResolverID, &m.ResolverName, &m.Status, &m.Outcome, &m.EvidenceURL,
 			&m.InitialLiquidity, &m.ClosesAt, &m.ResolvesAt, &m.CreatedAt,
 			&m.ResolvedAt, &m.DisputeDeadline,
 			&yr, &nr,
@@ -132,6 +136,40 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 		markets = append(markets, m)
 	}
 	return markets, rows.Err()
+}
+
+func (r *Repository) ListDisputes(ctx context.Context) ([]*DisputeRecord, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT d.id, d.market_id, m.question, d.reason, d.created_at,
+		       m.creator_id, creator.name, m.resolver_id, resolver.name,
+		       m.status, m.outcome, m.evidence_url, d.resolved_by, d.resolved_at,
+		       m.dispute_deadline, m.initial_liquidity
+		FROM disputes d
+		JOIN markets m ON m.id = d.market_id
+		JOIN users creator ON creator.id = m.creator_id
+		JOIN users resolver ON resolver.id = m.resolver_id
+		WHERE d.resolved_at IS NULL
+		ORDER BY d.created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list disputes: %w", err)
+	}
+	defer rows.Close()
+
+	var disputes []*DisputeRecord
+	for rows.Next() {
+		record := &DisputeRecord{}
+		if err := rows.Scan(
+			&record.DisputeID, &record.MarketID, &record.MarketQuestion, &record.Reason, &record.CreatedAt,
+			&record.CreatorID, &record.CreatorName, &record.ResolverID, &record.ResolverName,
+			&record.Status, &record.Outcome, &record.EvidenceURL, &record.ResolvedBy, &record.ResolvedAt,
+			&record.DisputeDeadline, &record.InitialLiquidity,
+		); err != nil {
+			return nil, fmt.Errorf("scan dispute: %w", err)
+		}
+		disputes = append(disputes, record)
+	}
+	return disputes, rows.Err()
 }
 
 type ResolveParams struct {

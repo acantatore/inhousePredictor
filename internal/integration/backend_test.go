@@ -35,6 +35,27 @@ func TestUserCreateMapsDuplicateEmailToConflict(t *testing.T) {
 	require.Equal(t, httpx.CodeConflict, appErr.Code)
 }
 
+func TestUserListReturnsLightweightSearchResults(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	createUser(t, pool, "zoe@example.com", false)
+	createUser(t, pool, "resolver.anna@example.com", true)
+	createUser(t, pool, "alex@example.com", false)
+
+	repo := user.NewRepository(pool)
+	users, err := repo.List(context.Background(), "anna", 10)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.Equal(t, "resolver.anna@example.com", users[0].Email)
+	require.True(t, users[0].IsAdmin)
+
+	allUsers, err := repo.List(context.Background(), "", 2)
+	require.NoError(t, err)
+	require.Len(t, allUsers, 2)
+	require.LessOrEqual(t, len(allUsers), 2)
+}
+
 func TestMarketCreateDebitsCreatorAndSeedsBalancedPool(t *testing.T) {
 	pool, cleanup := testutil.StartPostgres(t)
 	defer cleanup()

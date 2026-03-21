@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/naranjax/inhousepredictor/internal/auth"
 	"github.com/naranjax/inhousepredictor/internal/httpx"
@@ -54,6 +55,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, "Internal server error.", err))
 		return
 	}
+	claims, err := auth.ParseToken(token, h.jwtSecret)
+	if err != nil {
+		httpx.WriteError(w, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, "Internal server error.", err))
+		return
+	}
+	auth.SetTokenCookie(w, token, claims.ExpiresAt.Time)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"token": token, "user": u})
 }
 
@@ -69,4 +76,23 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, u)
+}
+
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid limit.", err))
+			return
+		}
+		limit = parsed
+	}
+
+	users, err := h.svc.List(r.Context(), r.URL.Query().Get("q"), limit)
+	if err != nil {
+		httpx.WriteError(w, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, "Internal server error.", err))
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, users)
 }

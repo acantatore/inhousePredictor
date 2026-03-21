@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/naranjax/inhousepredictor/internal/httpx"
@@ -19,12 +18,12 @@ const (
 func Middleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") {
+			token := TokenFromRequest(r)
+			if token == "" {
 				httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", nil))
 				return
 			}
-			claims, err := ParseToken(strings.TrimPrefix(header, "Bearer "), secret)
+			claims, err := ParseToken(token, secret)
 			if err != nil {
 				httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", err))
 				return

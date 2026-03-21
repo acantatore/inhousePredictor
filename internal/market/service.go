@@ -136,3 +136,7 @@ func (s *Service) ReviewDispute(ctx context.Context, marketID, adminID uuid.UUID
 	}
 	return s.payoutSvc.Payout(ctx, marketID, string(*outcome))
 }
+
+func (s *Service) ListDisputes(ctx context.Context) ([]*DisputeRecord, error) {
+	return s.repo.ListDisputes(ctx)
+}
