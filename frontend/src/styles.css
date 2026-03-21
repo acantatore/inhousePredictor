@@ -55,6 +55,14 @@ button {
   cursor: pointer;
 }
 
+button:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -360,6 +368,11 @@ span {
 .primary-button {
   background: linear-gradient(180deg, #3d6b84, #2d556c);
   color: white;
+}
+
+.primary-button:disabled {
+  background: linear-gradient(180deg, #8aa1af, #728997);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .secondary-button,

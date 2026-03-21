@@ -57,10 +57,10 @@ export function TradeTicket({
       </div>
 
       <div className="trade-toggle" role="tablist" aria-label="Trade side">
-        <button className={side === 'yes' ? 'trade-toggle-active yes-tone' : 'yes-tone'} type="button" onClick={() => setSide('yes')}>
+        <button className={side === 'yes' ? 'trade-toggle-active yes-tone' : 'yes-tone'} type="button" onClick={() => setSide('yes')} disabled={Boolean(disabledReason)}>
           Buy YES
         </button>
-        <button className={side === 'no' ? 'trade-toggle-active no-tone' : 'no-tone'} type="button" onClick={() => setSide('no')}>
+        <button className={side === 'no' ? 'trade-toggle-active no-tone' : 'no-tone'} type="button" onClick={() => setSide('no')} disabled={Boolean(disabledReason)}>
           Buy NO
         </button>
       </div>
@@ -72,6 +72,7 @@ export function TradeTicket({
             step={50}
             type="number"
             value={cost}
+            disabled={Boolean(disabledReason)}
             onChange={(event) => setCost(Number(event.target.value))}
           />
         </Field>
