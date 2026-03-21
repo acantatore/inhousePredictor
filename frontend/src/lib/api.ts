@@ -34,9 +34,12 @@ export const API_BASE_URL = trimSlash(
 );
 
 export function getWsUrl(token: string, marketId?: string) {
+  const localDevHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const wsBase = API_BASE_URL
     ? API_BASE_URL.replace(/^http/, 'ws')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+    : localDevHost
+      ? 'ws://127.0.0.1:8080'
+      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
   const url = new URL(`${wsBase}/ws`);
   url.searchParams.set('token', token);
   if (marketId) {
