@@ -31,6 +31,7 @@ type Position struct {
 	MarketID       uuid.UUID `json:"market_id"`
 	MarketQuestion string    `json:"market_question,omitempty"`
 	MarketStatus   string    `json:"market_status,omitempty"`
+	MarketOutcome  *string   `json:"market_outcome,omitempty"`
 	YesShares      float64   `json:"yes_shares"`
 	NoShares       float64   `json:"no_shares"`
 }

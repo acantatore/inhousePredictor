@@ -30,8 +30,8 @@ export function MarketDetailPage() {
         api.getPositions(token),
       ]);
       setMarket(nextMarket);
-      setTrades(nextTrades);
-      setPositions(nextPositions);
+      setTrades(nextTrades || []);
+      setPositions(nextPositions || []);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load this market right now.');
     } finally {

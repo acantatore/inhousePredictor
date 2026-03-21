@@ -17,7 +17,7 @@ export function AdminDisputesPage() {
       return;
     }
     api.listDisputes(token)
-      .then(setDisputes)
+      .then((nextDisputes) => setDisputes(nextDisputes || []))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load the dispute queue.'))
       .finally(() => setIsLoading(false));
   }, [token]);

@@ -60,6 +60,7 @@ export interface Position {
   market_id: string;
   market_question?: string;
   market_status?: string;
+  market_outcome?: Outcome | null;
   yes_shares: number;
   no_shares: number;
 }

@@ -4,3 +4,4 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/*.js
 frontend/*.d.ts
+.gstack/

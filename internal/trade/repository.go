@@ -161,7 +161,7 @@ func (r *Repository) execute(ctx context.Context, p executeParams) (*executeResu
 
 func (r *Repository) GetPositions(ctx context.Context, userID uuid.UUID) ([]*Position, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT p.user_id, p.market_id, m.question, m.status, p.yes_shares, p.no_shares
+		SELECT p.user_id, p.market_id, m.question, m.status, m.outcome::text, p.yes_shares, p.no_shares
 		FROM positions p
 		JOIN markets m ON m.id = p.market_id
 		WHERE p.user_id = $1 AND (p.yes_shares > 0 OR p.no_shares > 0)
@@ -174,7 +174,7 @@ func (r *Repository) GetPositions(ctx context.Context, userID uuid.UUID) ([]*Pos
 	var out []*Position
 	for rows.Next() {
 		pos := &Position{}
-		if err := rows.Scan(&pos.UserID, &pos.MarketID, &pos.MarketQuestion, &pos.MarketStatus, &pos.YesShares, &pos.NoShares); err != nil {
+		if err := rows.Scan(&pos.UserID, &pos.MarketID, &pos.MarketQuestion, &pos.MarketStatus, &pos.MarketOutcome, &pos.YesShares, &pos.NoShares); err != nil {
 			return nil, err
 		}
 		out = append(out, pos)

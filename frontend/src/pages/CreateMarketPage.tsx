@@ -38,7 +38,7 @@ export function CreateMarketPage() {
         if (cancelled) {
           return;
         }
-        setResolverOptions(users.filter((candidate) => candidate.id !== user?.id));
+        setResolverOptions((users || []).filter((candidate) => candidate.id !== user?.id));
       })
       .catch(() => {
         if (!cancelled) {

@@ -110,6 +110,7 @@ func TestTradeExecuteBlocksCreatorAndClosedMarkets(t *testing.T) {
 	})
 
 	t.Run("closed market rejects trade", func(t *testing.T) {
+		setMarketClosesAt(t, pool, marketID, time.Now().Add(-1*time.Hour))
 		service := trade.NewService(trade.NewRepository(pool), nil)
 		_, err := service.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: marketID, Side: trade.SideYes, Cost: 100})
 		appErr := &httpx.Error{}
@@ -163,6 +164,32 @@ func TestDisputeDeadlineIsEnforced(t *testing.T) {
 	appErr := &httpx.Error{}
 	require.ErrorAs(t, err, &appErr)
 	require.Equal(t, httpx.CodeDisputeClosed, appErr.Code)
+}
+
+func TestPositionsIncludeResolvedOutcome(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+	marketID := createMarket(t, pool, creatorID, resolverID, time.Now().Add(1*time.Hour), time.Now().Add(2*time.Hour))
+	require.NoError(t, makeTrade(t, pool, traderID, marketID, trade.SideYes, 200))
+
+	_, err := pool.Exec(context.Background(), `
+		UPDATE markets SET status = 'resolved', outcome = 'yes', evidence_url = 'https://example.com/evidence', resolved_at = NOW(), dispute_deadline = NOW() - INTERVAL '1 hour'
+		WHERE id = $1
+	`, marketID)
+	require.NoError(t, err)
+
+	require.NoError(t, trade.NewPayoutService(pool).FinalizeEligiblePayouts(context.Background()))
+
+	positions, err := trade.NewRepository(pool).GetPositions(context.Background(), traderID)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	require.NotNil(t, positions[0].MarketOutcome)
+	require.Equal(t, "yes", *positions[0].MarketOutcome)
+	require.Equal(t, "resolved", positions[0].MarketStatus)
 }
 
 func createUser(t *testing.T, pool *pgxpool.Pool, email string, isAdmin bool) uuid.UUID {

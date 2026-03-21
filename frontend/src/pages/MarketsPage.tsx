@@ -35,8 +35,8 @@ export function MarketsPage() {
         if (!isMounted) {
           return;
         }
-        setMarkets(nextMarkets);
-        setPositions(nextPositions);
+        setMarkets(nextMarkets || []);
+        setPositions(nextPositions || []);
       })
       .catch((err) => {
         if (!isMounted) {

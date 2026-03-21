@@ -67,7 +67,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
     throw new ApiError(message, code, response.status);
   }
 
-  return body.data as T;
+  return (body?.data ?? null) as T;
 }
 
 export const api = {
