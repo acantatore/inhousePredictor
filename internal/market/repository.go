@@ -71,7 +71,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 		SELECT m.id, m.question, m.description, m.category,
 		       m.creator_id, creator.name, m.resolver_id, resolver.name, m.status, m.outcome, m.evidence_url,
 		       m.initial_liquidity, m.closes_at, m.resolves_at, m.created_at,
-		       m.resolved_at, m.dispute_deadline,
+		       m.resolved_at, m.dispute_deadline, m.is_shadow, m.forecast_question_id,
 		       p.yes_reserve, p.no_reserve, p.total_collateral
 		FROM markets m
 		JOIN users creator ON creator.id = m.creator_id
@@ -82,7 +82,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 		&m.ID, &m.Question, &m.Description, &m.Category,
 		&m.CreatorID, &m.CreatorName, &m.ResolverID, &m.ResolverName, &m.Status, &m.Outcome, &m.EvidenceURL,
 		&m.InitialLiquidity, &m.ClosesAt, &m.ResolvesAt, &m.CreatedAt,
-		&m.ResolvedAt, &m.DisputeDeadline,
+		&m.ResolvedAt, &m.DisputeDeadline, &m.IsShadow, &m.ForecastQuestionID,
 		&p.YesReserve, &p.NoReserve, &p.TotalCollateral,
 	)
 	if err != nil {
@@ -102,14 +102,15 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 		SELECT m.id, m.question, m.description, m.category,
 		       m.creator_id, creator.name, m.resolver_id, resolver.name, m.status, m.outcome, m.evidence_url,
 		       m.initial_liquidity, m.closes_at, m.resolves_at, m.created_at,
-		       m.resolved_at, m.dispute_deadline,
+		       m.resolved_at, m.dispute_deadline, m.is_shadow, m.forecast_question_id,
 		       p.yes_reserve, p.no_reserve
 		FROM markets m
 		JOIN users creator ON creator.id = m.creator_id
 		JOIN users resolver ON resolver.id = m.resolver_id
 		JOIN pools p ON p.market_id = m.id
-		WHERE ($1 = '' OR m.category = $1::market_category)
-		  AND ($2 = '' OR m.status   = $2::market_status)
+		WHERE m.is_shadow = false
+		  AND ($1 = '' OR m.category = NULLIF($1, '')::market_category)
+		  AND ($2 = '' OR m.status   = NULLIF($2, '')::market_status)
 		ORDER BY m.created_at DESC
 		LIMIT $3
 	`, string(category), string(status), limit)
@@ -126,7 +127,7 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 			&m.ID, &m.Question, &m.Description, &m.Category,
 			&m.CreatorID, &m.CreatorName, &m.ResolverID, &m.ResolverName, &m.Status, &m.Outcome, &m.EvidenceURL,
 			&m.InitialLiquidity, &m.ClosesAt, &m.ResolvesAt, &m.CreatedAt,
-			&m.ResolvedAt, &m.DisputeDeadline,
+			&m.ResolvedAt, &m.DisputeDeadline, &m.IsShadow, &m.ForecastQuestionID,
 			&yr, &nr,
 		); err != nil {
 			return nil, err
@@ -136,6 +137,42 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 		markets = append(markets, m)
 	}
 	return markets, rows.Err()
+}
+
+func (r *Repository) CreateShadow(ctx context.Context, m *Market, p *Pool) error {
+	err := r.db.QueryRow(ctx, `
+		INSERT INTO markets
+		  (question, description, category, creator_id, resolver_id, initial_liquidity, closes_at, resolves_at, is_shadow, forecast_question_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,$9)
+		RETURNING id, created_at
+	`, m.Question, m.Description, string(m.Category), m.CreatorID, m.ResolverID, m.InitialLiquidity, m.ClosesAt, m.ResolvesAt, m.ForecastQuestionID).Scan(&m.ID, &m.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("insert shadow market: %w", err)
+	}
+	if _, err := r.db.Exec(ctx, `
+		INSERT INTO pools (market_id, yes_reserve, no_reserve, total_collateral)
+		VALUES ($1,$2,$3,$4)
+	`, m.ID, p.YesReserve, p.NoReserve, p.TotalCollateral); err != nil {
+		return fmt.Errorf("insert shadow pool: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) SyncShadowLifecycle(ctx context.Context, forecastQuestionID uuid.UUID, status Status, outcome *Outcome, evidenceURL *string, closesAt, resolvesAt time.Time, resolvedAt *time.Time) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE markets
+		SET status = $1,
+		    outcome = $2,
+		    evidence_url = $3,
+		    closes_at = $4,
+		    resolves_at = $5,
+		    resolved_at = $6
+		WHERE forecast_question_id = $7 AND is_shadow = true
+	`, string(status), outcome, evidenceURL, closesAt, resolvesAt, resolvedAt, forecastQuestionID)
+	if err != nil {
+		return fmt.Errorf("sync shadow lifecycle: %w", err)
+	}
+	return nil
 }
 
 func (r *Repository) ListDisputes(ctx context.Context) ([]*DisputeRecord, error) {

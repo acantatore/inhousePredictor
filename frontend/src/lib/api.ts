@@ -1,10 +1,16 @@
 import type {
   DisputeAction,
   DisputeRecord,
+  ExternalSignalSnapshot,
+  ForecastQuestion,
+  ForecastQuestionOutcome,
+  ForecastRevision,
+  ForecastScoreRecord,
   LoginResponse,
   Market,
   Outcome,
   Position,
+  ProgramRiskView,
   Trade,
   TradeSide,
   User,
@@ -151,6 +157,38 @@ export const api = {
   getPositions: (token: string) => request<Position[]>('/positions', {}, token),
 
   listDisputes: (token: string) => request<DisputeRecord[]>('/admin/disputes', {}, token),
+
+  listForecastQuestions: (token: string, query?: { program?: string; status?: string }) => {
+    const search = new URLSearchParams();
+    if (query?.program) search.set('program', query.program);
+    if (query?.status) search.set('status', query.status);
+    const suffix = search.toString() ? `?${search.toString()}` : '';
+    return request<ForecastQuestion[]>(`/forecast-questions${suffix}`, {}, token);
+  },
+
+  getForecastQuestion: (token: string, questionId: string) => request<ForecastQuestion>(`/forecast-questions/${questionId}`, {}, token),
+
+  createForecastQuestion: (token: string, payload: {
+    title: string;
+    description: string;
+    program: string;
+    resolver_id: string;
+    resolution_rule: string;
+    closes_at: string;
+    resolves_at: string;
+    contributor_ids: string[];
+  }) => request<ForecastQuestion>('/forecast-questions', { method: 'POST', body: JSON.stringify(payload) }, token),
+
+  submitForecast: (token: string, questionId: string, payload: { probability_bps: number; rationale: string }) =>
+    request<ForecastQuestion>(`/forecast-questions/${questionId}/forecasts`, { method: 'POST', body: JSON.stringify(payload) }, token),
+
+  resolveForecastQuestion: (token: string, questionId: string, payload: { outcome: ForecastQuestionOutcome; evidence_url: string }) =>
+    request<ForecastQuestion>(`/forecast-questions/${questionId}/resolve`, { method: 'POST', body: JSON.stringify(payload) }, token),
+
+  getProgramRisk: (token: string, program: string) => request<ProgramRiskView>(`/programs/${encodeURIComponent(program)}/risk`, {}, token),
+
+  createExternalSignal: (token: string, questionId: string, payload: { source: string; probability_bps: number; note: string }) =>
+    request<ExternalSignalSnapshot>(`/forecast-questions/${questionId}/external-signals`, { method: 'POST', body: JSON.stringify(payload) }, token),
 
   reviewDispute: (
     token: string,

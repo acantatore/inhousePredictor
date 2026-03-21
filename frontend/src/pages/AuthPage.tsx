@@ -12,7 +12,7 @@ export function AuthPage() {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
 
   if (user) {
-    return <Navigate to="/markets" replace />;
+    return <Navigate to="/forecast-questions" replace />;
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -36,15 +36,15 @@ export function AuthPage() {
     <div className="auth-layout">
       <section className="auth-copy">
         <p className="eyebrow">Warm, trustworthy forecasting</p>
-        <h1>See what your team thinks before the next decision lands.</h1>
-        <p>
-          InhousePredictor helps employees ask concrete questions, buy YES or NO with points, and keep outcomes grounded in visible evidence.
-        </p>
+          <h1>See what your team thinks before the next decision lands.</h1>
+          <p>
+            InhousePredictor helps teams turn roadmap commitments into visible forecasts with rationale, confidence history, and evidence-backed outcomes.
+          </p>
         <div className="auth-highlights">
           <Card>
-            <h2>What you can do</h2>
-            <p>Browse markets, place trades, create questions worth forecasting, and follow disputes when trust needs a second look.</p>
-          </Card>
+              <h2>What you can do</h2>
+              <p>Create commitment forecasts, track confidence over time, compare shadow market signals, and keep leadership aligned on risk.</p>
+            </Card>
           <Card>
             <h2>Why it feels safe</h2>
             <p>Resolver identity, deadlines, evidence, and dispute windows stay visible on the screen where decisions happen.</p>

@@ -1,4 +1,4 @@
-import type { Market, MarketStatus, Position } from '../types';
+import type { ForecastQuestion, ForecastQuestionStatus, Market, MarketStatus, Position } from '../types';
 
 export const categories = [
   { value: 'people', label: 'People' },
@@ -19,6 +19,17 @@ export const statuses: Array<{ value: MarketStatus; label: string }> = [
 export function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
+
+export function formatBpsPercent(value: number) {
+  return `${(value / 100).toFixed(value % 100 === 0 ? 0 : 1)}%`;
+}
+
+export const forecastStatuses: Array<{ value: ForecastQuestionStatus; label: string }> = [
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 export function formatPoints(value: number) {
   return `${new Intl.NumberFormat().format(Math.round(value))} pts`;
@@ -117,6 +128,10 @@ export function estimateShares(cost: number, probability: number) {
     return 0;
   }
   return cost / Math.max(probability, 0.05);
+}
+
+export function isForecastClosed(question: ForecastQuestion) {
+  return question.status !== 'open' || new Date(question.closes_at).getTime() <= Date.now();
 }
 
 export function derivePortfolioStats(markets: Market[], positions: Position[]) {

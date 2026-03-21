@@ -40,23 +40,25 @@ var ValidCategories = map[Category]bool{
 }
 
 type Market struct {
-	ID               uuid.UUID  `json:"id"`
-	Question         string     `json:"question"`
-	Description      string     `json:"description"`
-	Category         Category   `json:"category"`
-	CreatorID        uuid.UUID  `json:"creator_id"`
-	CreatorName      string     `json:"creator_name,omitempty"`
-	ResolverID       uuid.UUID  `json:"resolver_id"`
-	ResolverName     string     `json:"resolver_name,omitempty"`
-	Status           Status     `json:"status"`
-	Outcome          *Outcome   `json:"outcome,omitempty"`
-	EvidenceURL      *string    `json:"evidence_url,omitempty"`
-	InitialLiquidity int64      `json:"initial_liquidity"`
-	ClosesAt         time.Time  `json:"closes_at"`
-	ResolvesAt       time.Time  `json:"resolves_at"`
-	CreatedAt        time.Time  `json:"created_at"`
-	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
-	DisputeDeadline  *time.Time `json:"dispute_deadline,omitempty"`
+	ID                 uuid.UUID  `json:"id"`
+	Question           string     `json:"question"`
+	Description        string     `json:"description"`
+	Category           Category   `json:"category"`
+	CreatorID          uuid.UUID  `json:"creator_id"`
+	CreatorName        string     `json:"creator_name,omitempty"`
+	ResolverID         uuid.UUID  `json:"resolver_id"`
+	ResolverName       string     `json:"resolver_name,omitempty"`
+	Status             Status     `json:"status"`
+	Outcome            *Outcome   `json:"outcome,omitempty"`
+	EvidenceURL        *string    `json:"evidence_url,omitempty"`
+	InitialLiquidity   int64      `json:"initial_liquidity"`
+	ClosesAt           time.Time  `json:"closes_at"`
+	ResolvesAt         time.Time  `json:"resolves_at"`
+	CreatedAt          time.Time  `json:"created_at"`
+	ResolvedAt         *time.Time `json:"resolved_at,omitempty"`
+	DisputeDeadline    *time.Time `json:"dispute_deadline,omitempty"`
+	IsShadow           bool       `json:"is_shadow,omitempty"`
+	ForecastQuestionID *uuid.UUID `json:"forecast_question_id,omitempty"`
 	// Live pricing from pool
 	YesPrice float64 `json:"yes_price"`
 	NoPrice  float64 `json:"no_price"`

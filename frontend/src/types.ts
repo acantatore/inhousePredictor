@@ -3,6 +3,8 @@ export type MarketStatus = 'open' | 'closed' | 'resolved' | 'disputed' | 'cancel
 export type Outcome = 'yes' | 'no' | 'cancelled';
 export type TradeSide = 'yes' | 'no';
 export type DisputeAction = 'confirm_original' | 'override_outcome' | 'cancel_market';
+export type ForecastQuestionStatus = 'open' | 'closed' | 'resolved' | 'cancelled';
+export type ForecastQuestionOutcome = 'delivered' | 'not_delivered' | 'cancelled';
 
 export interface User {
   id: string;
@@ -82,6 +84,98 @@ export interface DisputeRecord {
   resolved_at?: string | null;
   dispute_deadline?: string | null;
   initial_liquidity: number;
+}
+
+export interface ForecastContributor {
+  user_id: string;
+  name: string;
+  email: string;
+  is_executive: boolean;
+}
+
+export interface ForecastRevision {
+  id: string;
+  forecast_question_id: string;
+  user_id: string;
+  user_name?: string;
+  probability_bps: number;
+  rationale: string;
+  created_at: string;
+}
+
+export interface ForecastProjection {
+  forecast_question_id: string;
+  official_probability_bps: number;
+  current_risk_bps: number;
+  contributor_count: number;
+  last_change_bps: number;
+  updated_at: string;
+}
+
+export interface ForecastScoreRecord {
+  user_id: string;
+  user_name?: string;
+  probability_bps: number;
+  outcome_value: number;
+  brier_score: number;
+  coverage_score: number;
+  revision_count: number;
+  created_at: string;
+}
+
+export interface ExternalSignalSnapshot {
+  id: string;
+  forecast_question_id: string;
+  source: string;
+  probability_bps: number;
+  note: string;
+  captured_at: string;
+}
+
+export interface ForecastQuestion {
+  id: string;
+  title: string;
+  description: string;
+  program: string;
+  owner_id: string;
+  owner_name?: string;
+  resolver_id: string;
+  resolver_name?: string;
+  status: ForecastQuestionStatus;
+  outcome?: ForecastQuestionOutcome | null;
+  resolution_rule: string;
+  rationale_policy_threshold: number;
+  linked_market_id?: string | null;
+  closes_at: string;
+  resolves_at: string;
+  resolved_at?: string | null;
+  evidence_url?: string | null;
+  created_at: string;
+  updated_at: string;
+  projection?: ForecastProjection;
+  contributors?: ForecastContributor[];
+  latest_rationales?: ForecastRevision[];
+  scores?: ForecastScoreRecord[];
+  external_signals?: ExternalSignalSnapshot[];
+}
+
+export interface ProgramRiskRow {
+  question_id: string;
+  title: string;
+  official_probability_bps: number;
+  current_risk_bps: number;
+  change_last_7_days_bps: number;
+  latest_rationale_excerpts: string[];
+  resolution_owner: string;
+  closes_at: string;
+  resolves_at: string;
+  external_signal_probability?: number | null;
+  status: ForecastQuestionStatus;
+}
+
+export interface ProgramRiskView {
+  program: string;
+  questions: ProgramRiskRow[];
 }
 
 export interface ApiErrorShape {

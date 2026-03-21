@@ -41,7 +41,9 @@ export function AppShell({
       </header>
 
       <nav className="primary-nav" aria-label="Primary navigation">
+        <NavItem to="/forecast-questions">Commitments</NavItem>
         <NavItem to="/markets">Markets</NavItem>
+        <NavItem to="/programs">Program View</NavItem>
         <NavItem to="/portfolio">Portfolio</NavItem>
         <NavItem to="/create">Create Market</NavItem>
         <NavItem to="/profile">Profile</NavItem>
@@ -51,9 +53,9 @@ export function AppShell({
       <main className="page-shell">{children}</main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
+        <NavItem to="/forecast-questions">Commitments</NavItem>
         <NavItem to="/markets">Markets</NavItem>
-        <NavItem to="/portfolio">Portfolio</NavItem>
-        <NavItem to="/create">Create</NavItem>
+        <NavItem to="/programs">Programs</NavItem>
         <NavItem to={isAdmin ? '/admin/disputes' : '/profile'}>{isAdmin ? 'Admin' : 'Profile'}</NavItem>
       </nav>
     </div>

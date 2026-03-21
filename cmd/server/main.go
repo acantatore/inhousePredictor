@@ -14,6 +14,7 @@ import (
 
 	"github.com/naranjax/inhousepredictor/internal/auth"
 	"github.com/naranjax/inhousepredictor/internal/db"
+	"github.com/naranjax/inhousepredictor/internal/forecast"
 	"github.com/naranjax/inhousepredictor/internal/market"
 	"github.com/naranjax/inhousepredictor/internal/migrate"
 	"github.com/naranjax/inhousepredictor/internal/trade"
@@ -56,6 +57,12 @@ func main() {
 	marketSvc := market.NewService(marketRepo, payoutSvc)
 	marketHandler := market.NewHandler(marketSvc)
 
+	forecastRepo := forecast.NewRepository(pool)
+	forecastSvc := forecast.NewService(forecastRepo, marketRepo, logger)
+	forecastHandler := forecast.NewHandler(forecastSvc)
+	forecastWorker := forecast.NewWorker(forecastRepo, logger)
+	go forecastWorker.Run(ctx)
+
 	tradeRepo := trade.NewRepository(pool)
 	tradeSvc := trade.NewService(tradeRepo, hub)
 	tradeHandler := trade.NewHandler(tradeSvc)
@@ -64,10 +71,10 @@ func main() {
 	r.Use(requestLogger(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
-	registerRoutes(r, jwtSecret, hub, userHandler, marketHandler, tradeHandler)
+	registerRoutes(r, jwtSecret, hub, userHandler, marketHandler, tradeHandler, forecastHandler)
 
 	apiRouter := chi.NewRouter()
-	registerRoutes(apiRouter, jwtSecret, hub, userHandler, marketHandler, tradeHandler)
+	registerRoutes(apiRouter, jwtSecret, hub, userHandler, marketHandler, tradeHandler, forecastHandler)
 	r.Mount("/api", apiRouter)
 
 	addr := ":8080"
@@ -101,7 +108,7 @@ func main() {
 	hub.Shutdown()
 }
 
-func registerRoutes(r chi.Router, jwtSecret string, hub *ws.Hub, userHandler *user.Handler, marketHandler *market.Handler, tradeHandler *trade.Handler) {
+func registerRoutes(r chi.Router, jwtSecret string, hub *ws.Hub, userHandler *user.Handler, marketHandler *market.Handler, tradeHandler *trade.Handler, forecastHandler *forecast.Handler) {
 	r.Post("/auth/register", userHandler.Register)
 	r.Post("/auth/login", userHandler.Login)
 	r.Get("/ws", ws.Handler(hub, jwtSecret, allowedOrigins()))
@@ -113,12 +120,19 @@ func registerRoutes(r chi.Router, jwtSecret string, hub *ws.Hub, userHandler *us
 		r.Get("/users", userHandler.List)
 
 		r.Get("/markets", marketHandler.List)
+		r.Get("/forecast-questions", forecastHandler.ListQuestions)
+		r.Get("/forecast-questions/{id}", forecastHandler.GetQuestion)
+		r.Get("/programs/{program}/risk", forecastHandler.ProgramView)
 		r.With(auth.AdminOnly).Get("/admin/disputes", marketHandler.ListDisputes)
 		r.Post("/markets", marketHandler.Create)
+		r.Post("/forecast-questions", forecastHandler.CreateQuestion)
 		r.Get("/markets/{id}", marketHandler.Get)
 		r.Post("/markets/{id}/resolve", marketHandler.Resolve)
 		r.Post("/markets/{id}/dispute", marketHandler.Dispute)
 		r.With(auth.AdminOnly).Post("/markets/{id}/review-dispute", marketHandler.ReviewDispute)
+		r.Post("/forecast-questions/{id}/forecasts", forecastHandler.SubmitForecast)
+		r.Post("/forecast-questions/{id}/resolve", forecastHandler.ResolveQuestion)
+		r.With(auth.AdminOnly).Post("/forecast-questions/{id}/external-signals", forecastHandler.CreateExternalSignal)
 
 		r.Post("/markets/{id}/trade", tradeHandler.Trade)
 		r.Get("/markets/{id}/trades", tradeHandler.MarketTrades)

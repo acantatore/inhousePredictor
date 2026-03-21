@@ -4,6 +4,8 @@ CREATE TYPE market_status   AS ENUM ('open', 'closed', 'resolved', 'disputed', '
 CREATE TYPE market_outcome  AS ENUM ('yes', 'no', 'cancelled');
 CREATE TYPE trade_side      AS ENUM ('yes', 'no');
 CREATE TYPE market_category AS ENUM ('people', 'okrs', 'slas', 'financials', 'general');
+CREATE TYPE forecast_question_status AS ENUM ('open', 'closed', 'resolved', 'cancelled');
+CREATE TYPE forecast_question_outcome AS ENUM ('delivered', 'not_delivered', 'cancelled');
 
 CREATE TABLE users (
     id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,7 +33,9 @@ CREATE TABLE markets (
     created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     resolved_at       TIMESTAMPTZ,
     dispute_deadline  TIMESTAMPTZ,
-    payout_at         TIMESTAMPTZ
+    payout_at         TIMESTAMPTZ,
+    is_shadow         BOOLEAN         NOT NULL DEFAULT false,
+    forecast_question_id UUID
 );
 
 -- AMM pool: constant-product invariant is computed from yes_reserve * no_reserve
@@ -81,3 +85,110 @@ CREATE INDEX idx_trades_market    ON trades(market_id, created_at DESC);
 CREATE INDEX idx_trades_user      ON trades(user_id);
 CREATE INDEX idx_positions_user   ON positions(user_id);
 CREATE INDEX idx_positions_market ON positions(market_id);
+
+CREATE TABLE forecast_questions (
+    id                UUID                     PRIMARY KEY DEFAULT gen_random_uuid(),
+    title             TEXT                     NOT NULL,
+    description       TEXT                     NOT NULL DEFAULT '',
+    program           TEXT                     NOT NULL,
+    owner_id          UUID                     NOT NULL REFERENCES users(id),
+    resolver_id       UUID                     NOT NULL REFERENCES users(id),
+    status            forecast_question_status NOT NULL DEFAULT 'open',
+    outcome           forecast_question_outcome,
+    resolution_rule   TEXT                     NOT NULL,
+    rationale_policy_threshold INTEGER         NOT NULL DEFAULT 10,
+    linked_market_id  UUID                     REFERENCES markets(id),
+    closes_at         TIMESTAMPTZ              NOT NULL,
+    resolves_at       TIMESTAMPTZ              NOT NULL,
+    resolved_at       TIMESTAMPTZ,
+    evidence_url      TEXT,
+    created_at        TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ              NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE forecast_question_contributors (
+    forecast_question_id UUID NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    user_id              UUID NOT NULL REFERENCES users(id),
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (forecast_question_id, user_id)
+);
+
+CREATE TABLE forecast_revisions (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    forecast_question_id UUID       NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    user_id             UUID        NOT NULL REFERENCES users(id),
+    probability_bps     INTEGER     NOT NULL,
+    rationale           TEXT        NOT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE forecast_latest_active (
+    forecast_question_id UUID        NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    user_id              UUID        NOT NULL REFERENCES users(id),
+    forecast_revision_id UUID        NOT NULL REFERENCES forecast_revisions(id) ON DELETE CASCADE,
+    probability_bps      INTEGER     NOT NULL,
+    rationale            TEXT        NOT NULL,
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (forecast_question_id, user_id)
+);
+
+CREATE TABLE forecast_projections (
+    forecast_question_id UUID        PRIMARY KEY REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    official_probability_bps INTEGER NOT NULL DEFAULT 0,
+    contributor_count    INTEGER     NOT NULL DEFAULT 0,
+    last_change_bps      INTEGER     NOT NULL DEFAULT 0,
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE forecast_snapshots (
+    forecast_question_id UUID        NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    user_id              UUID        NOT NULL REFERENCES users(id),
+    forecast_revision_id UUID        NOT NULL REFERENCES forecast_revisions(id) ON DELETE CASCADE,
+    probability_bps      INTEGER     NOT NULL,
+    rationale            TEXT        NOT NULL,
+    snapshotted_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (forecast_question_id, user_id)
+);
+
+CREATE TABLE forecast_score_records (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    forecast_question_id UUID       NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    user_id             UUID        NOT NULL REFERENCES users(id),
+    probability_bps     INTEGER     NOT NULL,
+    outcome_value       INTEGER     NOT NULL,
+    brier_score         DOUBLE PRECISION NOT NULL,
+    coverage_score      DOUBLE PRECISION NOT NULL,
+    revision_count      INTEGER     NOT NULL DEFAULT 1,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (forecast_question_id, user_id)
+);
+
+CREATE TABLE external_signal_snapshots (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    forecast_question_id UUID       NOT NULL REFERENCES forecast_questions(id) ON DELETE CASCADE,
+    source              TEXT        NOT NULL,
+    probability_bps     INTEGER     NOT NULL,
+    note                TEXT        NOT NULL DEFAULT '',
+    captured_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE background_jobs (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind        TEXT        NOT NULL,
+    dedupe_key  TEXT        NOT NULL UNIQUE,
+    payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    run_at      TIMESTAMPTZ NOT NULL,
+    status      TEXT        NOT NULL DEFAULT 'pending',
+    attempts    INTEGER     NOT NULL DEFAULT 0,
+    max_attempts INTEGER    NOT NULL DEFAULT 5,
+    last_error  TEXT,
+    processed_at TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_forecast_questions_program ON forecast_questions(program);
+CREATE INDEX idx_forecast_questions_status ON forecast_questions(status);
+CREATE INDEX idx_forecast_revisions_question_created ON forecast_revisions(forecast_question_id, created_at DESC);
+CREATE INDEX idx_forecast_latest_active_question ON forecast_latest_active(forecast_question_id);
+CREATE INDEX idx_background_jobs_run_at ON background_jobs(status, run_at);

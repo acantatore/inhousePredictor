@@ -168,6 +168,22 @@ span {
   align-items: center;
 }
 
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row-wrap {
+  flex-wrap: wrap;
+}
+
+.align-end {
+  align-items: flex-end;
+  text-align: right;
+}
+
 .balance-badge,
 .profile-chip,
 .category-chip,
@@ -257,6 +273,30 @@ span {
 .deadline-grid > *,
 .info-grid > * {
   flex: 1 1 220px;
+}
+
+.two-column-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 16px;
+}
+
+.question-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 252, 248, 0.92);
+  padding: 16px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
 }
 
 .stats-grid {
@@ -494,7 +534,8 @@ a:focus-visible {
   .stats-grid,
   .auth-layout,
   .detail-layout,
-  .market-row {
+  .market-row,
+  .two-column-layout {
     grid-template-columns: 1fr;
   }
 
