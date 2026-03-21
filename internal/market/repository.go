@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -91,6 +92,15 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 	p.MarketID = m.ID
 	m.YesPrice = p.NoReserve / (p.YesReserve + p.NoReserve)
 	m.NoPrice = p.YesReserve / (p.YesReserve + p.NoReserve)
+	options, err := r.GetOptions(ctx, m.ID)
+	if err == nil && len(options) > 0 {
+		m.Options = options
+		applyOptionSummary(m)
+	}
+	if snapshots, err := r.ListSnapshots(ctx, m.ID, 60); err == nil {
+		m.Snapshots = snapshots
+		applySentiment(m)
+	}
 	return m, p, nil
 }
 
@@ -134,9 +144,120 @@ func (r *Repository) List(ctx context.Context, category Category, status Status,
 		}
 		m.YesPrice = nr / (yr + nr)
 		m.NoPrice = yr / (yr + nr)
+		if options, err := r.GetOptions(ctx, m.ID); err == nil && len(options) > 0 {
+			m.Options = options
+			applyOptionSummary(m)
+		}
+		if snapshots, err := r.ListSnapshots(ctx, m.ID, 2); err == nil {
+			m.Snapshots = snapshots
+			applySentiment(m)
+		}
 		markets = append(markets, m)
 	}
 	return markets, rows.Err()
+}
+
+func (r *Repository) GetOptions(ctx context.Context, marketID uuid.UUID) ([]Option, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, market_id, label, sort_order, collateral, is_winner
+		FROM market_options
+		WHERE market_id = $1
+		ORDER BY sort_order ASC, created_at ASC
+	`, marketID)
+	if err != nil {
+		return nil, fmt.Errorf("get market options: %w", err)
+	}
+	defer rows.Close()
+	var opts []Option
+	var total int64
+	for rows.Next() {
+		var option Option
+		if err := rows.Scan(&option.ID, &option.MarketID, &option.Label, &option.SortOrder, &option.Collateral, &option.IsWinner); err != nil {
+			return nil, fmt.Errorf("scan market option: %w", err)
+		}
+		total += option.Collateral
+		opts = append(opts, option)
+	}
+	for i := range opts {
+		if total > 0 {
+			opts[i].ProbabilityBps = int((float64(opts[i].Collateral) / float64(total)) * 10000)
+		}
+	}
+	return opts, rows.Err()
+}
+
+func (r *Repository) ListSnapshots(ctx context.Context, marketID uuid.UUID, limit int) ([]Snapshot, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	rows, err := r.db.Query(ctx, `SELECT id, market_id, points, captured_at FROM market_probability_snapshots WHERE market_id = $1 ORDER BY captured_at ASC LIMIT $2`, marketID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list probability snapshots: %w", err)
+	}
+	defer rows.Close()
+	var snapshots []Snapshot
+	for rows.Next() {
+		var snapshot Snapshot
+		var raw []byte
+		if err := rows.Scan(&snapshot.ID, &snapshot.MarketID, &raw, &snapshot.CapturedAt); err != nil {
+			return nil, fmt.Errorf("scan probability snapshot: %w", err)
+		}
+		if err := json.Unmarshal(raw, &snapshot.Points); err != nil {
+			return nil, fmt.Errorf("decode probability snapshot: %w", err)
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, rows.Err()
+}
+
+func applyOptionSummary(m *Market) {
+	if len(m.Options) == 0 {
+		return
+	}
+	if len(m.Options) >= 1 {
+		m.YesPrice = float64(m.Options[0].ProbabilityBps) / 10000
+	}
+	if len(m.Options) >= 2 {
+		m.NoPrice = float64(m.Options[1].ProbabilityBps) / 10000
+	}
+}
+
+func applySentiment(m *Market) {
+	if len(m.Snapshots) < 2 {
+		m.Sentiment = "flat"
+		m.ChangeBps = 0
+		return
+	}
+	last := maxSnapshotProbability(m.Snapshots[len(m.Snapshots)-1].Points)
+	prev := maxSnapshotProbability(m.Snapshots[len(m.Snapshots)-2].Points)
+	change := last - prev
+	m.ChangeBps = change
+	switch {
+	case change > 25:
+		m.Sentiment = "up"
+	case change < -25:
+		m.Sentiment = "down"
+	default:
+		m.Sentiment = "flat"
+	}
+}
+
+func maxSnapshotProbability(points map[string]int) int {
+	var total int
+	for _, value := range points {
+		total += value
+	}
+	if total == 0 {
+		return 0
+	}
+	max := 0
+	for _, value := range points {
+		bps := int((float64(value) / float64(total)) * 10000)
+		if bps > max {
+			max = bps
+		}
+	}
+	return max
 }
 
 func (r *Repository) CreateShadow(ctx context.Context, m *Market, p *Pool) error {
@@ -154,6 +275,39 @@ func (r *Repository) CreateShadow(ctx context.Context, m *Market, p *Pool) error
 		VALUES ($1,$2,$3,$4)
 	`, m.ID, p.YesReserve, p.NoReserve, p.TotalCollateral); err != nil {
 		return fmt.Errorf("insert shadow pool: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) UpsertOptions(ctx context.Context, marketID uuid.UUID, options []Option) error {
+	for _, option := range options {
+		if _, err := r.db.Exec(ctx, `
+			INSERT INTO market_options (market_id, label, sort_order, collateral, is_winner)
+			VALUES ($1,$2,$3,$4,$5)
+			ON CONFLICT (market_id, label)
+			DO UPDATE SET sort_order = EXCLUDED.sort_order, collateral = EXCLUDED.collateral, is_winner = EXCLUDED.is_winner
+		`, marketID, option.Label, option.SortOrder, option.Collateral, option.IsWinner); err != nil {
+			return fmt.Errorf("upsert market option: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *Repository) RecordSnapshot(ctx context.Context, marketID uuid.UUID) error {
+	options, err := r.GetOptions(ctx, marketID)
+	if err != nil {
+		return err
+	}
+	points := map[string]int{}
+	for _, option := range options {
+		points[option.Label] = int(option.Collateral)
+	}
+	raw, err := json.Marshal(points)
+	if err != nil {
+		return fmt.Errorf("marshal snapshot points: %w", err)
+	}
+	if _, err := r.db.Exec(ctx, `INSERT INTO market_probability_snapshots (market_id, points) VALUES ($1, $2)`, marketID, raw); err != nil {
+		return fmt.Errorf("insert probability snapshot: %w", err)
 	}
 	return nil
 }
@@ -210,15 +364,21 @@ func (r *Repository) ListDisputes(ctx context.Context) ([]*DisputeRecord, error)
 }
 
 type ResolveParams struct {
-	MarketID    uuid.UUID
-	ResolverID  uuid.UUID
-	Outcome     Outcome
-	EvidenceURL string
+	MarketID        uuid.UUID
+	ResolverID      uuid.UUID
+	Outcome         Outcome
+	WinningOptionID *uuid.UUID
+	EvidenceURL     string
 }
 
 func (r *Repository) Resolve(ctx context.Context, p ResolveParams) error {
 	deadline := time.Now().Add(48 * time.Hour)
-	tag, err := r.db.Exec(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin resolve tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `
 		UPDATE markets
 		SET status = 'resolved', outcome = $1, evidence_url = $2,
 		    resolved_at = NOW(), dispute_deadline = $3
@@ -230,7 +390,15 @@ func (r *Repository) Resolve(ctx context.Context, p ResolveParams) error {
 	if tag.RowsAffected() == 0 {
 		return httpx.NewError(409, httpx.CodeInvalidState, "Market not found, wrong resolver, or not open.", nil)
 	}
-	return nil
+	if _, err := tx.Exec(ctx, `UPDATE market_options SET is_winner = false WHERE market_id = $1`, p.MarketID); err != nil {
+		return fmt.Errorf("clear winning options: %w", err)
+	}
+	if p.WinningOptionID != nil {
+		if _, err := tx.Exec(ctx, `UPDATE market_options SET is_winner = true WHERE id = $1 AND market_id = $2`, *p.WinningOptionID, p.MarketID); err != nil {
+			return fmt.Errorf("set winning option: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) Dispute(ctx context.Context, marketID, userID uuid.UUID, reason string) error {

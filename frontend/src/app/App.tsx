@@ -8,11 +8,6 @@ import { ResolveMarketPage } from '../pages/ResolveMarketPage';
 import { DisputePage } from '../pages/DisputePage';
 import { AdminDisputesPage } from '../pages/AdminDisputesPage';
 import { ProfilePage } from '../pages/ProfilePage';
-import { ForecastQuestionsPage } from '../pages/ForecastQuestionsPage';
-import { ForecastQuestionPage } from '../pages/ForecastQuestionPage';
-import { CreateForecastQuestionPage } from '../pages/CreateForecastQuestionPage';
-import { ProgramRiskPage } from '../pages/ProgramRiskPage';
-import { ProgramsPage } from '../pages/ProgramsPage';
 import { AppShell, LoadingState } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
@@ -46,12 +41,7 @@ export function App() {
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
       <Route element={<ProtectedLayout />}> 
-        <Route path="/" element={<Navigate to="/forecast-questions" replace />} />
-        <Route path="/forecast-questions" element={<ForecastQuestionsPage />} />
-        <Route path="/forecast-questions/new" element={<CreateForecastQuestionPage />} />
-        <Route path="/forecast-questions/:id" element={<ForecastQuestionPage />} />
-        <Route path="/programs" element={<ProgramsPage />} />
-        <Route path="/programs/:program" element={<ProgramRiskPage />} />
+        <Route path="/" element={<Navigate to="/markets" replace />} />
         <Route path="/markets" element={<MarketsPage />} />
         <Route path="/markets/:id" element={<MarketDetailPage />} />
         <Route path="/markets/:id/resolve" element={<ResolveMarketPage />} />

@@ -59,9 +59,30 @@ type Market struct {
 	DisputeDeadline    *time.Time `json:"dispute_deadline,omitempty"`
 	IsShadow           bool       `json:"is_shadow,omitempty"`
 	ForecastQuestionID *uuid.UUID `json:"forecast_question_id,omitempty"`
+	Sentiment          string     `json:"sentiment,omitempty"`
+	ChangeBps          int        `json:"change_bps,omitempty"`
+	Options            []Option   `json:"options,omitempty"`
+	Snapshots          []Snapshot `json:"snapshots,omitempty"`
 	// Live pricing from pool
 	YesPrice float64 `json:"yes_price"`
 	NoPrice  float64 `json:"no_price"`
+}
+
+type Option struct {
+	ID             uuid.UUID `json:"id"`
+	MarketID       uuid.UUID `json:"market_id"`
+	Label          string    `json:"label"`
+	SortOrder      int       `json:"sort_order"`
+	ProbabilityBps int       `json:"probability_bps"`
+	Collateral     int64     `json:"collateral"`
+	IsWinner       bool      `json:"is_winner,omitempty"`
+}
+
+type Snapshot struct {
+	ID         uuid.UUID      `json:"id"`
+	MarketID   uuid.UUID      `json:"market_id"`
+	CapturedAt time.Time      `json:"captured_at"`
+	Points     map[string]int `json:"points"`
 }
 
 type DisputeRecord struct {

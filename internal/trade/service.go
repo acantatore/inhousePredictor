@@ -24,6 +24,7 @@ type TradeRequest struct {
 	UserID   uuid.UUID
 	MarketID uuid.UUID
 	Side     Side
+	OptionID *uuid.UUID
 	Cost     int64
 }
 
@@ -38,6 +39,7 @@ func (s *Service) Execute(ctx context.Context, req TradeRequest) (*Trade, error)
 			UserID:   req.UserID,
 			MarketID: req.MarketID,
 			Side:     req.Side,
+			OptionID: req.OptionID,
 			Cost:     req.Cost,
 		})
 		if err == nil {
@@ -52,6 +54,15 @@ func (s *Service) Execute(ctx context.Context, req TradeRequest) (*Trade, error)
 	}
 
 	if s.hub != nil {
+		var optionPrices []ws.OptionPrice
+		for _, option := range result.Options {
+			optionPrices = append(optionPrices, ws.OptionPrice{OptionID: option.OptionID, Label: option.Label, Probability: option.Probability})
+		}
+		var optionID *string
+		if result.Trade.OptionID != nil {
+			value := result.Trade.OptionID.String()
+			optionID = &value
+		}
 		// Broadcast new price to all subscribers of this market.
 		s.hub.Broadcast(ws.Message{
 			Type:     ws.MsgPriceUpdate,
@@ -59,10 +70,13 @@ func (s *Service) Execute(ctx context.Context, req TradeRequest) (*Trade, error)
 			Payload: ws.PriceUpdatePayload{
 				YesPrice: result.NewPool.YesPrice(),
 				NoPrice:  result.NewPool.NoPrice(),
+				Options:  optionPrices,
 				LastTrade: &ws.TradeUpdate{
-					Side:   string(req.Side),
-					Shares: result.Trade.Shares,
-					Cost:   result.Trade.Cost,
+					Side:        string(req.Side),
+					OptionID:    optionID,
+					OptionLabel: result.Trade.OptionLabel,
+					Shares:      result.Trade.Shares,
+					Cost:        result.Trade.Cost,
 				},
 			},
 		})

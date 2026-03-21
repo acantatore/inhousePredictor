@@ -22,6 +22,7 @@ export function CreateMarketPage() {
     question: '',
     description: '',
     category: 'general',
+    options: ['YES', 'NO'],
     resolver_id: '',
     initial_liquidity: 500,
     closes_at: '',
@@ -67,6 +68,7 @@ export function CreateMarketPage() {
     try {
       const market = await api.createMarket(token, {
         ...form,
+        options: form.options.filter((option) => option.trim() !== ''),
         initial_liquidity: Number(form.initial_liquidity),
         closes_at: toIsoLocal(form.closes_at),
         resolves_at: toIsoLocal(form.resolves_at),
@@ -95,6 +97,23 @@ export function CreateMarketPage() {
         </Field>
         <Field label="Context" hint="Explain why the question matters and what teammates should know before buying YES or NO.">
           <TextArea rows={6} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
+        </Field>
+        <Field label="Options" hint="Add 2 or more outcomes. Markets can now have more than two outcomes.">
+          <div className="stack-sm">
+            {form.options.map((option, index) => (
+              <div className="row row-wrap" key={`${option}-${index}`}>
+                <TextInput value={option} onChange={(event) => setForm((current) => ({ ...current, options: current.options.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
+                {form.options.length > 2 ? (
+                  <button className="ghost-button" type="button" onClick={() => setForm((current) => ({ ...current, options: current.options.filter((_, itemIndex) => itemIndex !== index) }))}>
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            <button className="secondary-button" type="button" onClick={() => setForm((current) => ({ ...current, options: [...current.options, `Option ${current.options.length + 1}`] }))}>
+              Add option
+            </button>
+          </div>
         </Field>
       </Card>
 

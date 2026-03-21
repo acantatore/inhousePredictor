@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, getWsUrl } from '../lib/api';
-import { categories, getPositionForMarket, partitionMarkets } from '../lib/utils';
+import { categories, getPositionForMarket, marketLeader, partitionMarkets, sentimentClass, sentimentLabel } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import type { Market, Position, WsPriceUpdate } from '../types';
 import { MarketRow } from '../components/MarketRow';
@@ -147,6 +147,26 @@ export function MarketsPage() {
           </div>
         </div>
       </Card>
+
+      <section className="stack-md">
+        <SectionHeader title="Market movers" copy="Quick pulse cards inspired by live tickers: what is moving up, what is moving down, and where sentiment is now." />
+        <div className="ticker-grid">
+          {markets.slice(0, 6).map((market) => {
+            const leader = marketLeader(market);
+            return (
+              <Link key={`${market.id}-ticker`} to={`/markets/${market.id}`} className="activity-link">
+                <Card className="ticker-card">
+                  <div className="row row-wrap">
+                    <strong>{market.question}</strong>
+                    <span className={`position-chip ${sentimentClass(market)}`}>{sentimentLabel(market)}</span>
+                  </div>
+                  <small>{leader ? `${leader.label} leads at ${Math.round(leader.probability_bps / 100)}%` : 'No signal yet'}</small>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <MarketSection
         title="Closing Soon"

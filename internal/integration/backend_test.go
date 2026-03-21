@@ -166,6 +166,48 @@ func TestDisputeDeadlineIsEnforced(t *testing.T) {
 	require.Equal(t, httpx.CodeDisputeClosed, appErr.Code)
 }
 
+func TestMultiOptionMarketTradeAndSnapshots(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+	marketRepo := market.NewRepository(pool)
+	svc := market.NewService(marketRepo, trade.NewPayoutService(pool))
+	m, err := svc.Create(context.Background(), market.CreateParams{
+		Question:         "Which region wins Q3 growth?",
+		Description:      "Three-way market",
+		Category:         market.CategoryFinancials,
+		Options:          []string{"LatAm", "EMEA", "NA"},
+		CreatorID:        creatorID,
+		ResolverID:       resolverID,
+		InitialLiquidity: 900,
+		ClosesAt:         time.Now().Add(24 * time.Hour),
+		ResolvesAt:       time.Now().Add(48 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.Len(t, m.Options, 3)
+	tradeSvc := trade.NewService(trade.NewRepository(pool), nil)
+	optionID := m.Options[2].ID
+	tradeResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: m.ID, OptionID: &optionID, Cost: 300})
+	require.NoError(t, err)
+	require.Equal(t, "NA", tradeResult.OptionLabel)
+	refetched, _, err := marketRepo.GetByID(context.Background(), m.ID)
+	require.NoError(t, err)
+	require.Len(t, refetched.Options, 3)
+	var leader string
+	var maxBps int
+	for _, option := range refetched.Options {
+		if option.ProbabilityBps > maxBps {
+			maxBps = option.ProbabilityBps
+			leader = option.Label
+		}
+	}
+	require.Equal(t, "NA", leader)
+	require.GreaterOrEqual(t, len(refetched.Snapshots), 2)
+}
+
 func TestPositionsIncludeResolvedOutcome(t *testing.T) {
 	pool, cleanup := testutil.StartPostgres(t)
 	defer cleanup()

@@ -30,21 +30,32 @@ func (h *Handler) Trade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Side string `json:"side"` // "yes" or "no"
-		Cost int64  `json:"cost"` // play money points to spend
+		Side     string  `json:"side"`
+		OptionID *string `json:"option_id,omitempty"`
+		Cost     int64   `json:"cost"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
-	if req.Side != "yes" && req.Side != "no" {
+	if req.OptionID == nil && req.Side != "yes" && req.Side != "no" {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeValidation, "Side must be yes or no.", nil))
 		return
+	}
+	var optionID *uuid.UUID
+	if req.OptionID != nil && *req.OptionID != "" {
+		parsed, err := uuid.Parse(*req.OptionID)
+		if err != nil {
+			httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid option id.", err))
+			return
+		}
+		optionID = &parsed
 	}
 	t, err := h.svc.Execute(r.Context(), TradeRequest{
 		UserID:   userID,
 		MarketID: marketID,
 		Side:     Side(req.Side),
+		OptionID: optionID,
 		Cost:     req.Cost,
 	})
 	if err != nil {

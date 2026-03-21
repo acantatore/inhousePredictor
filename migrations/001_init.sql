@@ -86,6 +86,49 @@ CREATE INDEX idx_trades_user      ON trades(user_id);
 CREATE INDEX idx_positions_user   ON positions(user_id);
 CREATE INDEX idx_positions_market ON positions(market_id);
 
+CREATE TABLE market_options (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    market_id      UUID        NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+    label          TEXT        NOT NULL,
+    sort_order     INTEGER     NOT NULL DEFAULT 0,
+    collateral     BIGINT      NOT NULL DEFAULT 0,
+    is_winner      BOOLEAN     NOT NULL DEFAULT false,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (market_id, label)
+);
+
+CREATE TABLE option_positions (
+    user_id         UUID             NOT NULL REFERENCES users(id),
+    market_option_id UUID            NOT NULL REFERENCES market_options(id) ON DELETE CASCADE,
+    shares          DOUBLE PRECISION NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, market_option_id)
+);
+
+CREATE TABLE option_trades (
+    id                  UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id             UUID             NOT NULL REFERENCES users(id),
+    market_id           UUID             NOT NULL REFERENCES markets(id),
+    market_option_id    UUID             NOT NULL REFERENCES market_options(id) ON DELETE CASCADE,
+    shares              DOUBLE PRECISION NOT NULL,
+    cost                BIGINT           NOT NULL,
+    probability_before  DOUBLE PRECISION NOT NULL,
+    probability_after   DOUBLE PRECISION NOT NULL,
+    created_at          TIMESTAMPTZ      NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE market_probability_snapshots (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    market_id    UUID       NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+    points      JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_market_options_market ON market_options(market_id, sort_order);
+CREATE INDEX idx_option_positions_user ON option_positions(user_id);
+CREATE INDEX idx_option_positions_option ON option_positions(market_option_id);
+CREATE INDEX idx_option_trades_market ON option_trades(market_id, created_at DESC);
+CREATE INDEX idx_probability_snapshots_market ON market_probability_snapshots(market_id, captured_at DESC);
+
 CREATE TABLE forecast_questions (
     id                UUID                     PRIMARY KEY DEFAULT gen_random_uuid(),
     title             TEXT                     NOT NULL,

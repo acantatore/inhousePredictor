@@ -40,8 +40,29 @@ export interface Market {
   created_at: string;
   resolved_at?: string | null;
   dispute_deadline?: string | null;
+  sentiment?: string;
+  change_bps?: number;
+  options?: MarketOption[];
+  snapshots?: MarketSnapshot[];
   yes_price: number;
   no_price: number;
+}
+
+export interface MarketOption {
+  id: string;
+  market_id: string;
+  label: string;
+  sort_order: number;
+  probability_bps: number;
+  collateral: number;
+  is_winner?: boolean;
+}
+
+export interface MarketSnapshot {
+  id: string;
+  market_id: string;
+  captured_at: string;
+  points: Record<string, number>;
 }
 
 export interface Trade {
@@ -49,6 +70,8 @@ export interface Trade {
   user_id: string;
   market_id: string;
   side: TradeSide;
+  option_id?: string | null;
+  option_label?: string;
   shares: number;
   cost: number;
   user_balance?: number;
@@ -63,8 +86,14 @@ export interface Position {
   market_question?: string;
   market_status?: string;
   market_outcome?: Outcome | null;
+  winning_option_id?: string | null;
   yes_shares: number;
   no_shares: number;
+  holdings?: Array<{
+    option_id: string;
+    option_label: string;
+    shares: number;
+  }>;
 }
 
 export interface DisputeRecord {
@@ -198,8 +227,15 @@ export interface WsPriceUpdate {
   payload: {
     yes_price?: number;
     no_price?: number;
+    options?: Array<{
+      option_id: string;
+      label: string;
+      probability_bps: number;
+    }>;
     last_trade?: {
       side: TradeSide;
+      option_id?: string | null;
+      option_label?: string;
       shares: number;
       cost: number;
     };

@@ -27,13 +27,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Question         string    `json:"question"`
-		Description      string    `json:"description"`
-		Category         string    `json:"category"`
-		ResolverID       string    `json:"resolver_id"`
-		InitialLiquidity int64     `json:"initial_liquidity"`
-		ClosesAt         time.Time `json:"closes_at"`
-		ResolvesAt       time.Time `json:"resolves_at"`
+		Question         string   `json:"question"`
+		Description      string   `json:"description"`
+		Category         string   `json:"category"`
+		Options          []string `json:"options"`
+		ResolverID       string   `json:"resolver_id"`
+		InitialLiquidity int64    `json:"initial_liquidity"`
+		ClosesAt         string   `json:"closes_at"`
+		ResolvesAt       string   `json:"resolves_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
@@ -44,15 +45,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid resolver_id.", err))
 		return
 	}
+	closesAt, err := time.Parse(time.RFC3339, req.ClosesAt)
+	if err != nil {
+		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid closes_at.", err))
+		return
+	}
+	resolvesAt, err := time.Parse(time.RFC3339, req.ResolvesAt)
+	if err != nil {
+		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid resolves_at.", err))
+		return
+	}
 	m, err := h.svc.Create(r.Context(), CreateParams{
 		Question:         req.Question,
 		Description:      req.Description,
 		Category:         Category(req.Category),
+		Options:          req.Options,
 		CreatorID:        userID,
 		ResolverID:       resolverID,
 		InitialLiquidity: req.InitialLiquidity,
-		ClosesAt:         req.ClosesAt,
-		ResolvesAt:       req.ResolvesAt,
+		ClosesAt:         closesAt,
+		ResolvesAt:       resolvesAt,
 	})
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -98,14 +110,40 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Outcome     string `json:"outcome"`
-		EvidenceURL string `json:"evidence_url"`
+		Outcome     string  `json:"outcome,omitempty"`
+		OptionID    *string `json:"option_id,omitempty"`
+		EvidenceURL string  `json:"evidence_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
-	if err := h.svc.Resolve(r.Context(), marketID, userID, Outcome(req.Outcome), req.EvidenceURL); err != nil {
+	outcome := Outcome(req.Outcome)
+	var optionID *uuid.UUID
+	if req.OptionID != nil && *req.OptionID != "" {
+		parsed := strings.TrimSpace(*req.OptionID)
+		optionUUID, err := uuid.Parse(parsed)
+		if err != nil {
+			httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Invalid option_id.", err))
+			return
+		}
+		if marketItem, err := h.svc.Get(r.Context(), marketID); err == nil {
+			optionID = &optionUUID
+			for _, option := range marketItem.Options {
+				if option.ID == optionUUID {
+					if strings.EqualFold(option.Label, "YES") {
+						outcome = OutcomeYes
+					} else if strings.EqualFold(option.Label, "NO") {
+						outcome = OutcomeNo
+					} else {
+						outcome = OutcomeCancelled
+					}
+					break
+				}
+			}
+		}
+	}
+	if err := h.svc.Resolve(r.Context(), ResolveRequest{MarketID: marketID, ResolverID: userID, Outcome: outcome, WinningOptionID: optionID, EvidenceURL: req.EvidenceURL}); err != nil {
 		httpx.WriteError(w, err)
 		return
 	}

@@ -165,6 +165,44 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 		`ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS dedupe_key TEXT`,
 		`ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 5`,
 		`ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+		`CREATE TABLE IF NOT EXISTS market_options (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			market_id UUID NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+			label TEXT NOT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			collateral BIGINT NOT NULL DEFAULT 0,
+			is_winner BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (market_id, label)
+		)`,
+		`CREATE TABLE IF NOT EXISTS option_positions (
+			user_id UUID NOT NULL REFERENCES users(id),
+			market_option_id UUID NOT NULL REFERENCES market_options(id) ON DELETE CASCADE,
+			shares DOUBLE PRECISION NOT NULL DEFAULT 0,
+			PRIMARY KEY (user_id, market_option_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS option_trades (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id),
+			market_id UUID NOT NULL REFERENCES markets(id),
+			market_option_id UUID NOT NULL REFERENCES market_options(id) ON DELETE CASCADE,
+			shares DOUBLE PRECISION NOT NULL,
+			cost BIGINT NOT NULL,
+			probability_before DOUBLE PRECISION NOT NULL,
+			probability_after DOUBLE PRECISION NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS market_probability_snapshots (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			market_id UUID NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+			points JSONB NOT NULL DEFAULT '{}'::jsonb,
+			captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_market_options_market ON market_options(market_id, sort_order)`,
+		`CREATE INDEX IF NOT EXISTS idx_option_positions_user ON option_positions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_option_positions_option ON option_positions(market_option_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_option_trades_market ON option_trades(market_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_probability_snapshots_market ON market_probability_snapshots(market_id, captured_at DESC)`,
 	}
 	for _, stmt := range alterStmts {
 		if _, err := db.Exec(ctx, stmt); err != nil {
@@ -173,6 +211,37 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	}
 	if _, err := db.Exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_background_jobs_dedupe_key ON background_jobs(dedupe_key)`); err != nil {
 		return fmt.Errorf("ensure background_jobs dedupe index: %w", err)
+	}
+	backfill := []string{
+		`INSERT INTO market_options (market_id, label, sort_order, collateral)
+		 SELECT m.id, 'YES', 0, GREATEST(1, FLOOR(p.total_collateral * (p.no_reserve / NULLIF((p.yes_reserve + p.no_reserve),0)))::BIGINT)
+		 FROM markets m JOIN pools p ON p.market_id = m.id
+		 WHERE NOT EXISTS (SELECT 1 FROM market_options mo WHERE mo.market_id = m.id)`,
+		`INSERT INTO market_options (market_id, label, sort_order, collateral)
+		 SELECT m.id, 'NO', 1, GREATEST(1, p.total_collateral - FLOOR(p.total_collateral * (p.no_reserve / NULLIF((p.yes_reserve + p.no_reserve),0)))::BIGINT)
+		 FROM markets m JOIN pools p ON p.market_id = m.id
+		 WHERE (SELECT COUNT(*) FROM market_options mo WHERE mo.market_id = m.id) = 1`,
+		`INSERT INTO option_positions (user_id, market_option_id, shares)
+		 SELECT p.user_id, mo.id, p.yes_shares
+		 FROM positions p JOIN market_options mo ON mo.market_id = p.market_id AND mo.label = 'YES'
+		 WHERE p.yes_shares > 0 AND NOT EXISTS (SELECT 1 FROM option_positions op WHERE op.user_id = p.user_id AND op.market_option_id = mo.id)`,
+		`INSERT INTO option_positions (user_id, market_option_id, shares)
+		 SELECT p.user_id, mo.id, p.no_shares
+		 FROM positions p JOIN market_options mo ON mo.market_id = p.market_id AND mo.label = 'NO'
+		 WHERE p.no_shares > 0 AND NOT EXISTS (SELECT 1 FROM option_positions op WHERE op.user_id = p.user_id AND op.market_option_id = mo.id)`,
+		`UPDATE market_options mo SET is_winner = true FROM markets m WHERE m.id = mo.market_id AND ((m.outcome = 'yes' AND mo.label = 'YES') OR (m.outcome = 'no' AND mo.label = 'NO'))`,
+		`INSERT INTO market_probability_snapshots (market_id, points)
+		 SELECT m.id, jsonb_build_object('YES', yes_mo.collateral, 'NO', no_mo.collateral)
+		 FROM markets m
+		 JOIN market_options yes_mo ON yes_mo.market_id = m.id AND yes_mo.label = 'YES'
+		 JOIN market_options no_mo ON no_mo.market_id = m.id AND no_mo.label = 'NO'
+		 WHERE NOT EXISTS (SELECT 1 FROM market_probability_snapshots s WHERE s.market_id = m.id)
+		`,
+	}
+	for _, stmt := range backfill {
+		if _, err := db.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("backfill multi-option market data: %w", err)
+		}
 	}
 	return nil
 }

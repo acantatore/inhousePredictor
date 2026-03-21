@@ -22,15 +22,24 @@ type Message struct {
 }
 
 type PriceUpdatePayload struct {
-	YesPrice  float64      `json:"yes_price"`
-	NoPrice   float64      `json:"no_price"`
-	LastTrade *TradeUpdate `json:"last_trade,omitempty"`
+	YesPrice  float64       `json:"yes_price"`
+	NoPrice   float64       `json:"no_price"`
+	Options   []OptionPrice `json:"options,omitempty"`
+	LastTrade *TradeUpdate  `json:"last_trade,omitempty"`
+}
+
+type OptionPrice struct {
+	OptionID    string `json:"option_id"`
+	Label       string `json:"label"`
+	Probability int    `json:"probability_bps"`
 }
 
 type TradeUpdate struct {
-	Side   string  `json:"side"`
-	Shares float64 `json:"shares"`
-	Cost   int64   `json:"cost"`
+	Side        string  `json:"side"`
+	OptionID    *string `json:"option_id,omitempty"`
+	OptionLabel string  `json:"option_label,omitempty"`
+	Shares      float64 `json:"shares"`
+	Cost        int64   `json:"cost"`
 }
 
 type client struct {

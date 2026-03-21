@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { estimateShares, formatPercent, formatPoints, getTradeDisabledReason } from '../lib/utils';
-import type { Market, TradeSide, User } from '../types';
+import { estimateShares, formatBpsPercent, formatPoints, getMarketOptions, getTradeDisabledReason } from '../lib/utils';
+import type { Market, MarketOption, TradeSide, User } from '../types';
 import { Card, Field, InlineNotice, TextInput } from './ui';
 
 export function TradeTicket({
@@ -15,13 +15,15 @@ export function TradeTicket({
   user: User;
   onTraded: () => Promise<void>;
 }) {
-  const [side, setSide] = useState<TradeSide>('yes');
+  const options = useMemo(() => getMarketOptions(market), [market]);
+  const [selectedOptionId, setSelectedOptionId] = useState<string>(() => options[0]?.id || '');
   const [cost, setCost] = useState(200);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const currentProbability = side === 'yes' ? market.yes_price : market.no_price;
+  const selectedOption = options.find((option) => option.id === selectedOptionId) || options[0];
+  const currentProbability = selectedOption ? selectedOption.probability_bps / 10000 : 0;
   const estimatedShares = useMemo(() => estimateShares(cost, currentProbability), [cost, currentProbability]);
   const disabledReason = getTradeDisabledReason(market, user.id, user.balance, cost);
 
@@ -37,7 +39,7 @@ export function TradeTicket({
 
     try {
       setIsSubmitting(true);
-      await api.trade(token, market.id, { side, cost });
+      await api.trade(token, market.id, { side: selectedOption?.label.toLowerCase() as TradeSide, option_id: selectedOption?.id, cost });
       setMessage('Trade placed. Your balance and market signal are refreshing now.');
       await onTraded();
     } catch (err) {
@@ -56,13 +58,12 @@ export function TradeTicket({
         </div>
       </div>
 
-      <div className="trade-toggle" role="tablist" aria-label="Trade side">
-        <button className={side === 'yes' ? 'trade-toggle-active yes-tone' : 'yes-tone'} type="button" onClick={() => setSide('yes')} disabled={Boolean(disabledReason)}>
-          Buy YES
-        </button>
-        <button className={side === 'no' ? 'trade-toggle-active no-tone' : 'no-tone'} type="button" onClick={() => setSide('no')} disabled={Boolean(disabledReason)}>
-          Buy NO
-        </button>
+      <div className="stack-sm" role="tablist" aria-label="Trade option">
+        {options.map((option) => (
+          <button key={option.id} className={selectedOptionId === option.id ? 'trade-toggle-active trade-option-button' : 'trade-option-button'} type="button" onClick={() => setSelectedOptionId(option.id)} disabled={Boolean(disabledReason)}>
+            {option.label} · {formatBpsPercent(option.probability_bps)}
+          </button>
+        ))}
       </div>
 
       <form className="stack-md" onSubmit={submitTrade}>
@@ -80,7 +81,7 @@ export function TradeTicket({
         <div className="ticket-summary">
           <div>
             <span>Current crowd signal</span>
-            <strong>{side === 'yes' ? `YES ${formatPercent(market.yes_price)}` : `NO ${formatPercent(market.no_price)}`}</strong>
+            <strong>{selectedOption ? `${selectedOption.label} ${formatBpsPercent(selectedOption.probability_bps)}` : 'N/A'}</strong>
           </div>
           <div>
             <span>Estimated shares</span>
@@ -95,7 +96,7 @@ export function TradeTicket({
         {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
 
         <button className="primary-button" disabled={isSubmitting || Boolean(disabledReason)} type="submit">
-          {isSubmitting ? 'Placing trade...' : side === 'yes' ? 'Buy YES' : 'Buy NO'}
+          {isSubmitting ? 'Placing trade...' : selectedOption ? `Buy ${selectedOption.label}` : 'Buy option'}
         </button>
       </form>
     </Card>

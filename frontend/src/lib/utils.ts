@@ -1,4 +1,4 @@
-import type { ForecastQuestion, ForecastQuestionStatus, Market, MarketStatus, Position } from '../types';
+import type { ForecastQuestion, ForecastQuestionStatus, Market, MarketOption, MarketStatus, Position } from '../types';
 
 export const categories = [
   { value: 'people', label: 'People' },
@@ -98,6 +98,34 @@ export function getTradeDisabledReason(market: Market, viewerId?: string, balanc
     return 'You do not have enough points for this trade.';
   }
   return null;
+}
+
+export function getMarketOptions(market: Market): MarketOption[] {
+  if (market.options && market.options.length > 0) {
+    return market.options;
+  }
+  return [
+    { id: `${market.id}-yes`, market_id: market.id, label: 'YES', sort_order: 0, probability_bps: Math.round(market.yes_price * 10000), collateral: 0 },
+    { id: `${market.id}-no`, market_id: market.id, label: 'NO', sort_order: 1, probability_bps: Math.round(market.no_price * 10000), collateral: 0 },
+  ];
+}
+
+export function marketLeader(market: Market) {
+  const options = getMarketOptions(market).slice().sort((a, b) => b.probability_bps - a.probability_bps);
+  return options[0] || null;
+}
+
+export function sentimentLabel(market: Market) {
+  const leader = marketLeader(market);
+  if (!leader) return 'Flat';
+  const direction = market.sentiment === 'down' ? 'Down' : market.sentiment === 'up' ? 'Up' : 'Flat';
+  return `${direction} ${formatBpsPercent(Math.abs(market.change_bps || 0))}`;
+}
+
+export function sentimentClass(market: Market) {
+  if (market.sentiment === 'up') return 'sentiment-up';
+  if (market.sentiment === 'down') return 'sentiment-down';
+  return 'sentiment-flat';
 }
 
 export function isClosingSoon(market: Market) {

@@ -123,6 +123,7 @@ export const api = {
       question: string;
       description: string;
       category: string;
+      options?: string[];
       resolver_id: string;
       initial_liquidity: number;
       closes_at: string;
@@ -134,7 +135,7 @@ export const api = {
       body: JSON.stringify(payload),
     }, token),
 
-  trade: (token: string, marketId: string, payload: { side: TradeSide; cost: number }) =>
+  trade: (token: string, marketId: string, payload: { side?: TradeSide; option_id?: string; cost: number }) =>
     request<Trade>(`/markets/${marketId}/trade`, {
       method: 'POST',
       body: JSON.stringify(payload),

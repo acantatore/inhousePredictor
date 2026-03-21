@@ -264,15 +264,63 @@ span {
 .form-grid,
 .stats-grid,
 .deadline-grid,
-.info-grid {
+.info-grid,
+.ticker-grid {
   flex-wrap: wrap;
 }
 
 .controls-grid > *,
 .form-grid > *,
 .deadline-grid > *,
-.info-grid > * {
+.info-grid > *,
+.ticker-grid > * {
   flex: 1 1 220px;
+}
+
+.ticker-card {
+  min-height: 130px;
+}
+
+.market-option-stack {
+  min-width: 220px;
+}
+
+.trade-option-button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 252, 248, 0.92);
+}
+
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.market-chart {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 252, 248, 0.92);
+}
+
+.sentiment-up {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.sentiment-down {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.sentiment-flat {
+  color: var(--slate);
+  background: var(--slate-soft);
 }
 
 .two-column-layout {

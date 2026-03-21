@@ -47,6 +47,6 @@ func TestCreateRejectsInvalidTiming(t *testing.T) {
 
 func TestResolveValidatesEvidenceURL(t *testing.T) {
 	svc := NewService(&Repository{}, &fakePayoutService{})
-	err := svc.Resolve(context.Background(), uuid.New(), uuid.New(), OutcomeYes, "not-a-url")
+	err := svc.Resolve(context.Background(), ResolveRequest{MarketID: uuid.New(), ResolverID: uuid.New(), Outcome: OutcomeYes, EvidenceURL: "not-a-url"})
 	require.Error(t, err)
 }
