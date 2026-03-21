@@ -31,6 +31,10 @@ func allowedOrigins() map[string]struct{} {
 	if len(allowed) == 0 {
 		allowed["http://localhost:3000"] = struct{}{}
 		allowed["http://127.0.0.1:3000"] = struct{}{}
+		allowed["http://localhost:5173"] = struct{}{}
+		allowed["http://127.0.0.1:5173"] = struct{}{}
+		allowed["http://localhost:4173"] = struct{}{}
+		allowed["http://127.0.0.1:4173"] = struct{}{}
 		allowed["http://localhost:8080"] = struct{}{}
 		allowed["http://127.0.0.1:8080"] = struct{}{}
 	}
