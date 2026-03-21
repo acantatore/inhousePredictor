@@ -14,7 +14,7 @@ InhousePredictor is a **play-money internal prediction market platform** for com
 
 | Layer | Technology |
 |---|---|
-| Language | Go 1.22 |
+| Language | Go 1.24 |
 | HTTP Router | [chi/v5](https://github.com/go-chi/chi) |
 | Database | PostgreSQL 16 |
 | DB Driver | [pgx/v5](https://github.com/jackc/pgx) |
@@ -41,11 +41,15 @@ inhousePredictor/
 │   │   └── cpmm.go              # Constant Product Market Maker algorithm
 │   ├── db/
 │   │   └── db.go                # pgxpool connection setup
+│   ├── httpx/
+│   │   └── httpx.go             # Shared JSON success/error helpers
 │   ├── market/
 │   │   ├── handler.go           # HTTP handlers (Create, Get, List, Resolve, Dispute)
 │   │   ├── model.go             # Market & Pool structs
 │   │   ├── repository.go        # DB queries for markets
 │   │   └── service.go           # Business rules for markets
+│   ├── migrate/
+│   │   └── migrate.go           # Startup schema reconciliation
 │   ├── trade/
 │   │   ├── handler.go           # HTTP handlers (Trade, MyPositions, MarketTrades)
 │   │   ├── model.go             # Trade & Position structs
@@ -56,6 +60,8 @@ inhousePredictor/
 │   │   ├── model.go             # User struct
 │   │   ├── repository.go        # User DB queries
 │   │   └── service.go           # Register/Authenticate logic
+│   ├── validate/
+│   │   └── validate.go          # Input validation helpers
 │   └── ws/
 │       ├── handler.go           # WebSocket upgrade + read/write pumps
 │       └── hub.go               # Pub/sub broadcaster for price updates
@@ -99,6 +105,7 @@ inhousePredictor/
 | resolves_at | TIMESTAMPTZ | |
 | resolved_at | TIMESTAMPTZ | |
 | dispute_deadline | TIMESTAMPTZ | 48h after resolution |
+| payout_at | TIMESTAMPTZ | Set when payout/refund has been finalized |
 | evidence_url | TEXT | Set on resolution |
 
 ### `pools` (one-to-one with markets)
@@ -107,7 +114,6 @@ inhousePredictor/
 | market_id | UUID PK | |
 | yes_reserve | DOUBLE PRECISION | |
 | no_reserve | DOUBLE PRECISION | |
-| k | DOUBLE PRECISION | Constant product invariant (yes × no). Drifts over time — see known issues |
 | total_collateral | BIGINT | Sum of all cost spent on this market |
 | updated_at | TIMESTAMPTZ | |
 
@@ -146,19 +152,20 @@ inhousePredictor/
 ### Public Endpoints
 ```
 POST /auth/register    body: {name, email, password}
-POST /auth/login       body: {email, password} → {token, user}
-GET  /ws               Upgrade to WebSocket (optional ?market_id=<uuid>)
+POST /auth/login       body: {email, password} → {data: {token, user}}
+GET  /ws               Upgrade to WebSocket (optional ?market_id=<uuid>, Bearer auth required)
 ```
 
 ### Authenticated Endpoints (Bearer <JWT> required)
 ```
 GET  /me
 
-GET  /markets                      ?category=<enum>&status=<enum>  (no pagination)
+GET  /markets                      ?category=<enum>&status=<enum>  (bounded to 50 rows)
 POST /markets                      body: {question, description, category, resolver_id, initial_liquidity, closes_at, resolves_at}
 GET  /markets/{id}
 POST /markets/{id}/resolve         body: {outcome: "yes"|"no", evidence_url}  — resolver only
 POST /markets/{id}/dispute         body: {reason}
+POST /markets/{id}/review-dispute  body: {action, outcome?, evidence_url?}       — admin only
 
 POST /markets/{id}/trade           body: {side: "yes"|"no", cost: <int64 points>}
 GET  /markets/{id}/trades          Returns last 50 trades
@@ -214,11 +221,11 @@ user_payout = user_winning_shares × payout_per_share
 
 ## Trade Execution — Concurrency Model
 
-All trades run at **SERIALIZABLE isolation** with `SELECT ... FOR UPDATE` on the pool row. This prevents:
+All trades run at **SERIALIZABLE isolation** with `SELECT ... FOR UPDATE` on the market and pool rows. This prevents:
 - Double-spend (balance deducted atomically)
 - K-invariant violation from concurrent trades
 
-Serialization failures (PG error 40001) currently bubble up as raw errors — see known issues.
+Serialization failures are retried and then returned as a user-safe `market_busy` error.
 
 ---
 
@@ -261,9 +268,9 @@ docker-compose up
 # DB:  localhost:5432
 ```
 
-Schema is applied automatically on first container start via the migrations volume mount.
+Schema is reconciled on application startup.
 
-There is no programmatic way to create the first admin — you must set `is_admin = true` directly in the database.
+First admin bootstrap is supported with `BOOTSTRAP_ADMIN_EMAIL`.
 
 ---
 
@@ -273,26 +280,16 @@ There is no programmatic way to create the first admin — you must set `is_admi
 
 | # | Issue | Location |
 |---|---|---|
-| 1 | `closes_at` not enforced — trades accepted after deadline | `trade/repository.go` |
-| 2 | `Payout()` is not idempotent — calling twice doubles balances | `trade/repository.go` |
-| 3 | Dispute deadline not enforced server-side | `market/repository.go` |
-| 4 | Serialization errors (PG 40001) returned as raw errors | `trade/repository.go` |
-| 5 | `K` column drifts via float64 arithmetic — should be computed inline | `cpmm/cpmm.go`, `pools` table |
-| 6 | Duplicate email on register returns raw Postgres error | `user/repository.go` |
-| 7 | Migrations only run on fresh containers (no migration runner) | `migrations/` |
-| 8 | No way to bootstrap first admin without direct DB access | `user/` |
-| 9 | No CPMM unit tests (K invariant, price symmetry, payout) | `cpmm/cpmm.go` |
-| 10 | No integration tests | — |
+| 1 | Resolved markets finalize payouts lazily on later app activity, not by background worker | `trade/payout.go`, `market/service.go` |
+| 2 | Cancelled-market disputes do not yet have a dedicated user-facing explanation path | `market/handler.go` |
+| 3 | No API-level pagination cursor yet; list is only bounded to 50 rows | `market/repository.go` |
 
 ### P2 — Before general availability
 
 - Sell/exit mechanism (currently buy-only)
 - Structured logging (`slog`)
-- Market list pagination (currently returns all rows)
-- Input validation (max lengths, URL format, password min 8 chars)
-- `closes_at < resolves_at` validation on market creation
-- Graceful shutdown (SIGTERM)
-- Policy decision: can creators trade their own markets?
+- Full cursor-based market list pagination beyond bounded launch query behavior
+- Creator trading restriction enforcement (policy is now locked: creators cannot trade their own markets)
 
 ### P3 — Nice to have
 
@@ -308,8 +305,8 @@ There is no programmatic way to create the first admin — you must set `is_admi
 ## What Doesn't Exist Yet
 
 - **Frontend** — `frontend/` is an empty directory
-- **Admin panel** — No endpoints for dispute resolution or user management
+- **Admin panel** — No frontend surface for dispute resolution or user management
 - **Rate limiting** — No request throttling
 - **CI/CD** — No pipeline or linting config
 - **Sell/exit trades** — Users can only buy, not exit positions
-- **Tests** — Zero test files currently exist
+- **Frontend** — Still not built

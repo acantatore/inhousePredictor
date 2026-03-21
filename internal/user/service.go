@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
+	"github.com/naranjax/inhousepredictor/internal/validate"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -20,9 +22,12 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) Register(ctx context.Context, name, email, password string) (*User, error) {
+	if err := validate.Password(password); err != nil {
+		return nil, httpx.NewError(400, httpx.CodeValidation, err.Error(), err)
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
+		return nil, httpx.NewError(500, httpx.CodeInternal, "Internal server error.", fmt.Errorf("hash password: %w", err))
 	}
 	return s.repo.Create(ctx, name, email, string(hash))
 }

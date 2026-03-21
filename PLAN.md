@@ -33,6 +33,117 @@ This plan assumes the current backend exists, the frontend does not yet exist, a
 
 ---
 
+## What Already Exists
+
+The implementation plan should reuse existing design decisions rather than inventing a second product definition.
+
+Existing design assets already locked in:
+
+- `DESIGN.md` navigation model for desktop and mobile
+- `DESIGN.md` information architecture for app shell and core screens
+- `DESIGN.md` screen blueprints for Markets, Market Detail, Portfolio, Create Market, Resolve Market, Dispute Submission, and Admin Disputes
+- `DESIGN.md` component vocabulary including `Market Row`, `Trade Ticket`, `Deadline Block`, `Evidence Card`, `Dispute Banner`, and `Performance Stat`
+- `DESIGN.md` interaction state matrix, responsive behavior, and accessibility requirements
+- `COPY_GUIDE.md` tone, action labels, error language, and empty-state rules
+
+Implementation should extend these patterns, not replace them.
+
+---
+
+## Not In Scope
+
+The following design work is explicitly not part of this implementation plan:
+
+- public marketing pages, launch pages, or growth-site work
+- a generic enterprise admin console
+- advanced charting or analytics-first market views
+- tournament, leaderboard, or social-feed mechanics
+- final brand assets, illustration system, or marketing-style hero art
+
+These are intentionally deferred so the team can focus on a trustworthy internal forecasting product.
+
+---
+
+## Information Architecture Execution Rules
+
+Implementation must preserve the screen hierarchy already established in `DESIGN.md`.
+
+### Markets
+
+Users should notice, in order:
+
+1. what needs attention now
+2. what the crowd currently thinks
+3. whether they already have a stake
+
+Execution implications:
+
+- `Closing Soon` must appear before general open markets
+- probability, deadline, and user-position cues must be scannable in one row
+- the team-context explanation should orient first-time users without pushing markets below the fold unnecessarily
+
+### Market Detail
+
+Users should notice, in order:
+
+1. what the market is asking
+2. whether action is still available
+3. what the current crowd signal is
+4. why the eventual outcome can be trusted
+5. what the user can do right now
+
+Execution implications:
+
+- trade panel cannot dominate the page before the market question and timing context are clear
+- resolver identity, evidence, and dispute state are trust elements, not footer metadata
+- disabled trading states must become explanation surfaces, not dead forms
+
+### Portfolio
+
+Users should notice, in order:
+
+1. how they are doing overall
+2. which predictions are still unresolved
+3. what resolved recently
+
+Execution implications:
+
+- summary stats lead the page
+- unresolved holdings are prioritized above historical detail
+- copy and visuals must avoid implying sell-based or live-liquid trading mechanics that do not exist in v1
+
+---
+
+## Anti-Generic UI Guardrails
+
+The frontend implementation should not fall back to generic SaaS dashboard patterns just because they are easy to assemble.
+
+Avoid:
+
+- interchangeable card-grid dashboards where all content competes equally
+- oversized marketing-style hero treatments inside the product shell
+- finance-terminal styling, ticker behavior, or noisy real-time animations
+- empty states that read like placeholders
+- visual hierarchy that makes controls louder than the market question or trust signals
+
+Prefer:
+
+- structured lists and rows that support fast scanning
+- sectioning that emphasizes timing, probability, and trust
+- calm, editorial-feeling layouts instead of widget collections
+- action areas that feel grounded in explanation, not conversion pressure
+- trust surfaces such as resolver identity, evidence, and dispute state treated as core content
+
+Implementation rules:
+
+- the Markets page should feel like a forecasting workspace, not a dashboard of unrelated widgets
+- Market Detail should prioritize the market question and timing context before trade mechanics
+- Portfolio should feel reflective and performance-oriented, not like a brokerage account
+- Admin Disputes should stay narrow and task-focused rather than expanding into a control-center layout
+- if a UI pattern is not already supported by `DESIGN.md` component vocabulary, it should justify itself before being introduced
+
+---
+
 ## Phase 0 - Product Contract Lock
 
 ### Goal
@@ -69,11 +180,13 @@ Remove correctness and trust issues that would break the product for first users
 - remove stored `k` and compute invariant inline
 - map duplicate email to a safe conflict response
 - add shared JSON error/response layer
+- lock dispute state transitions and payout interaction rules before admin UI work begins
 
 ### Dependencies
 
 - schema changes for payout tracking and pool cleanup
 - agreement on target error contract
+- agreement on allowed dispute outcomes and whether payout is deferred, confirmed, or overridden during dispute handling
 
 ### Exit Criteria
 
@@ -122,6 +235,7 @@ Bring security boundaries in line with an internal company product.
 - enforce an approved origin allowlist for WebSocket upgrades
 - verify resolver-only and admin-only server-side authorization paths
 - tighten validation for passwords, URLs, question length, and timing rules
+- define bounded market-list query behavior for launch routes so the default Markets screen does not depend on unbounded result sets
 
 ### Dependencies
 
@@ -149,11 +263,35 @@ Create the minimum automated confidence required for launch.
 - cover market creation, trade execution, payout behavior, deadline enforcement, and auth rules
 - add concurrency coverage for serialization retry behavior
 - add WS handshake and subscription tests
+- add startup and operational-path tests for migrations, bootstrap-admin behavior, and launch-critical runtime checks
 
 ### Exit Criteria
 
 - critical business rules are covered by automated tests
 - regressions in payout, deadline, or authorization behavior are caught automatically
+- startup and launch-path regressions are caught before release instead of during deploy
+
+---
+
+## Phase 4.5 - V1 API Contract Freeze
+
+### Goal
+
+Freeze the user-facing backend contract before real frontend integration begins.
+
+### Required Work
+
+- lock request and response shapes for auth, markets, market detail, trade, positions, resolve, dispute, and admin dispute surfaces
+- lock standardized error responses for validation, auth, not-found, conflict, busy, closed, and unauthorized states
+- lock creator-trading restriction behavior and message contract
+- lock WS authentication and origin requirements for launch-ready environments
+- verify frontend-critical contract paths in integration tests
+
+### Exit Criteria
+
+- frontend work no longer depends on temporary backend semantics
+- user-facing error and state handling can be implemented once instead of reworked repeatedly
+- the API contract documented in `API.md` is the implementation target for Phase 5 onward
 
 ---
 
@@ -173,7 +311,7 @@ Create the first usable product shell aligned with `DESIGN.md`.
 
 ### Dependencies
 
-- stable auth and markets APIs
+- frozen v1 API contract for all user-facing surfaces
 - stable error responses
 - documented copy and flow expectations
 
@@ -209,6 +347,37 @@ Deliver the full employee and resolver experience for v1.
 - a normal employee can complete every core v1 flow without manual support
 - a resolver can resolve with evidence
 - a user can file a dispute during the valid window
+
+---
+
+## Interaction State Coverage Required Before Launch
+
+The following states are part of the feature definition, not optional polish.
+
+| Surface | Loading | Empty | Error | Success | Partial / Live |
+|---|---|---|---|---|---|
+| Auth | disabled submit with inline progress | n/a | invalid credentials, duplicate email, validation guidance | logged in or account created | retained form input after recoverable error |
+| Markets | skeleton rows and filters | explain what markets are, CTA to create | failed to load markets | filter or view mode applied | stale prices or disconnected live feed |
+| Market Detail | skeleton header and trade panel | n/a | missing market, unauthorized, busy, closed-state explanation | trade placed, dispute filed, resolution shown | content loaded while activity or live data is delayed |
+| Portfolio | skeleton stat blocks and rows | no positions yet, CTA to explore markets | failed to load portfolio | n/a | some metrics loaded before detailed rows |
+| Create Market | disabled submit while validating | n/a | inline validation and submit failure | market created | local draft-like state preserved after recoverable error |
+| Resolve Market | disabled submit | n/a | invalid evidence, unauthorized, invalid market state | resolution recorded | confirmation visible while downstream market data refreshes |
+| Dispute Submission | disabled submit | dispute unavailable because market is not eligible | validation failure, deadline closed, unauthorized | dispute submitted with next-step explanation | market page refresh lag after submit |
+| Admin Disputes | skeleton queue | no disputes to review | queue failed to load, action failed | dispute action completed | queue data refreshing or stale |
+
+Implementation rules:
+
+- empty states must include warmth, context, and one clear next action
+- disabled states must explain why action is unavailable
+- partial and live-update states must degrade gracefully without hiding core content
+- success states should confirm what changed without sounding like a trading app
+
+Phase ownership:
+
+- Phase 5 must deliver auth, markets, and market-detail loading, empty, and error states
+- Phase 6 must deliver trade, portfolio, create, resolve, and dispute state coverage
+- Phase 7 must deliver admin dispute queue state coverage
+- Phase 8 must verify all states against `QA.md` before launch signoff
 
 ---
 
@@ -295,6 +464,16 @@ Admin dispute handling, security hardening, QA, and operations checks are comple
 
 ---
 
+## Code Quality Guardrails
+
+- backend is the source of truth for business validation, authorization rules, and typed error semantics
+- frontend may mirror validation for usability, but must not become the only place a rule exists
+- shared response and error helpers should be reused across handlers instead of copied per route
+- UI state handling should consume documented error codes and states rather than infer backend behavior ad hoc
+- implementation should prefer extending existing market, trade, auth, and ws modules over inventing parallel orchestration layers without a clear boundary
+
+---
+
 ## Major Risks
 
 - backend bugs may leak into the first frontend if Phase 1 is rushed
@@ -308,7 +487,6 @@ Admin dispute handling, security hardening, QA, and operations checks are comple
 ## Nice-To-Have Work After Launch Readiness
 
 - sell or exit flow
-- market list pagination
 - calibration scores
 - seasonal tournaments
 - market archival

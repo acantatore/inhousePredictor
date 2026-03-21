@@ -30,15 +30,15 @@ CREATE TABLE markets (
     resolves_at       TIMESTAMPTZ     NOT NULL,
     created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     resolved_at       TIMESTAMPTZ,
-    dispute_deadline  TIMESTAMPTZ
+    dispute_deadline  TIMESTAMPTZ,
+    payout_at         TIMESTAMPTZ
 );
 
--- AMM pool: yes_reserve * no_reserve = k (constant product invariant)
+-- AMM pool: constant-product invariant is computed from yes_reserve * no_reserve
 CREATE TABLE pools (
     market_id        UUID             PRIMARY KEY REFERENCES markets(id) ON DELETE CASCADE,
     yes_reserve      DOUBLE PRECISION NOT NULL,
     no_reserve       DOUBLE PRECISION NOT NULL,
-    k                DOUBLE PRECISION NOT NULL,
     total_collateral BIGINT           NOT NULL DEFAULT 0,
     updated_at       TIMESTAMPTZ      NOT NULL DEFAULT NOW()
 );

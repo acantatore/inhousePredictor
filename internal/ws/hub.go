@@ -3,6 +3,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 )
@@ -43,6 +44,7 @@ type Hub struct {
 	subscribe   chan *client
 	unsubscribe chan *client
 	broadcast   chan Message
+	shutdown    chan struct{}
 }
 
 func NewHub() *Hub {
@@ -51,12 +53,19 @@ func NewHub() *Hub {
 		subscribe:   make(chan *client, 256),
 		unsubscribe: make(chan *client, 256),
 		broadcast:   make(chan Message, 1024),
+		shutdown:    make(chan struct{}),
 	}
 }
 
-func (h *Hub) Run() {
+func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			h.closeAll()
+			return
+		case <-h.shutdown:
+			h.closeAll()
+			return
 		case c := <-h.subscribe:
 			h.mu.Lock()
 			h.clients[c] = struct{}{}
@@ -92,4 +101,17 @@ func (h *Hub) Run() {
 
 func (h *Hub) Broadcast(msg Message) {
 	h.broadcast <- msg
+}
+
+func (h *Hub) Shutdown() {
+	close(h.shutdown)
+}
+
+func (h *Hub) closeAll() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		close(c.send)
+		delete(h.clients, c)
+	}
 }
