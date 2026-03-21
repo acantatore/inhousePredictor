@@ -39,7 +39,7 @@ Authorization: Bearer <jwt>
 
 - registration and login are public
 - all product endpoints other than auth require authentication
-- WebSocket should require authentication before launch, even if current implementation does not yet enforce that
+- WebSocket requires authentication and approved origins
 
 ---
 
@@ -66,8 +66,7 @@ Authorization: Bearer <jwt>
 
 ## Target Response Shape
 
-The current codebase does not yet standardize responses everywhere.
-The target contract should move to a consistent JSON model.
+The current codebase standardizes HTTP responses around a JSON success and error envelope.
 
 ### Success Envelope
 
@@ -96,7 +95,7 @@ For list responses:
 }
 ```
 
-The exact envelope is still an open implementation item, but all future work should converge on one stable JSON error shape.
+This envelope is now the implementation target for all handlers.
 
 ---
 
@@ -190,8 +189,8 @@ List markets.
 
 #### Notes
 
-- current implementation has no pagination
-- pagination should be added before broader rollout
+- current implementation bounds responses to 50 rows
+- cursor pagination should still be added before broader rollout
 
 ### `POST /markets`
 
@@ -265,7 +264,7 @@ Resolve a market.
 - records outcome
 - records evidence URL
 - sets resolution timestamps and dispute deadline
-- triggers payout safely and idempotently
+- leaves payout pending until the dispute deadline passes without dispute, or until an admin completes dispute review
 
 #### Target Errors
 
@@ -293,6 +292,43 @@ Submit a dispute.
 #### Target Errors
 
 - `dispute_window_closed`
+- `invalid_market_state`
+- `validation_error`
+
+### `POST /markets/{id}/review-dispute`
+
+Review a disputed market.
+
+#### Authorization
+
+- admin only
+
+#### Request
+
+```json
+{
+  "action": "override_outcome",
+  "outcome": "no",
+  "evidence_url": "https://example.com/updated-evidence"
+}
+```
+
+#### Supported Actions
+
+- `confirm_original`
+- `override_outcome`
+- `cancel_market`
+
+#### Expected Behavior
+
+- only works for disputed markets
+- records dispute review actor and timestamp
+- if confirming or overriding, finalizes payout idempotently
+- if cancelling, refunds spent points idempotently
+
+#### Target Errors
+
+- `forbidden`
 - `invalid_market_state`
 - `validation_error`
 
@@ -494,9 +530,6 @@ GET /ws?market_id=<uuid>
 
 ## Known Gaps Between Current Implementation And Target Contract
 
-- current handlers do not yet consistently return standardized JSON errors
-- WS currently exists without required launch-grade auth and origin restrictions
-- `closes_at` enforcement is currently broken and must be fixed
-- dispute deadline enforcement is currently broken and must be fixed
-- payout idempotency is currently broken and must be fixed
-- market list pagination is not yet implemented
+- market listing is bounded but does not yet expose cursor pagination
+- payout finalization is lazy after dispute deadline or admin review rather than background-job driven
+- no frontend is consuming this contract yet, so end-to-end UI/API compatibility is still pending

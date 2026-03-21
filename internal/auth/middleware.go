@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
 )
 
 type contextKey string
@@ -20,12 +21,12 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", nil))
 				return
 			}
 			claims, err := ParseToken(strings.TrimPrefix(header, "Bearer "), secret)
 			if err != nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", err))
 				return
 			}
 			ctx := context.WithValue(r.Context(), contextKeyUserID, claims.UserID)
@@ -39,7 +40,7 @@ func AdminOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isAdmin, _ := r.Context().Value(contextKeyIsAdmin).(bool)
 		if !isAdmin {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			httpx.WriteError(w, httpx.NewError(http.StatusForbidden, httpx.CodeForbidden, "Forbidden.", nil))
 			return
 		}
 		next.ServeHTTP(w, r)

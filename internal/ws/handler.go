@@ -2,23 +2,38 @@ package ws
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
+	"github.com/naranjax/inhousepredictor/internal/auth"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// TODO: restrict to company domain in prod
-		return true
-	},
 }
 
 // Handler upgrades HTTP to WebSocket and registers the client with the hub.
 // Optional query param: ?market_id=<uuid> to subscribe to a single market.
-func Handler(hub *Hub) http.HandlerFunc {
+func Handler(hub *Hub, secret string, allowedOrigins map[string]struct{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !originAllowed(r.Header.Get("Origin"), allowedOrigins) {
+			httpx.WriteError(w, httpx.NewError(http.StatusForbidden, httpx.CodeForbidden, "Forbidden.", nil))
+			return
+		}
+		header := r.Header.Get("Authorization")
+		if !strings.HasPrefix(header, "Bearer ") {
+			httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", nil))
+			return
+		}
+		if _, err := auth.ParseToken(strings.TrimPrefix(header, "Bearer "), secret); err != nil {
+			httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", err))
+			return
+		}
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			return originAllowed(r.Header.Get("Origin"), allowedOrigins)
+		}
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
@@ -51,4 +66,12 @@ func Handler(hub *Hub) http.HandlerFunc {
 			}
 		}
 	}
+}
+
+func originAllowed(origin string, allowed map[string]struct{}) bool {
+	if len(allowed) == 0 {
+		return false
+	}
+	_, ok := allowed[origin]
+	return ok
 }

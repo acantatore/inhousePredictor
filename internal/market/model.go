@@ -64,6 +64,13 @@ type Pool struct {
 	MarketID        uuid.UUID
 	YesReserve      float64
 	NoReserve       float64
-	K               float64
 	TotalCollateral int64
 }
+
+type DisputeAction string
+
+const (
+	DisputeActionConfirmOriginal DisputeAction = "confirm_original"
+	DisputeActionOverrideOutcome DisputeAction = "override_outcome"
+	DisputeActionCancelMarket    DisputeAction = "cancel_market"
+)

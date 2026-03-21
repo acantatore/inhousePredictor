@@ -2,10 +2,13 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
 )
 
 type Repository struct {
@@ -26,6 +29,10 @@ func (r *Repository) Create(ctx context.Context, name, email, passwordHash strin
 		&u.ID, &u.Name, &u.Email, &u.Balance, &u.IsAdmin, &u.CreatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, httpx.NewError(409, httpx.CodeConflict, "That email is already registered.", err)
+		}
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil

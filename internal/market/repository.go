@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
 )
 
 type Repository struct {
@@ -41,9 +42,9 @@ func (r *Repository) Create(ctx context.Context, m *Market, p *Pool) error {
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO pools (market_id, yes_reserve, no_reserve, k, total_collateral)
-		VALUES ($1,$2,$3,$4,$5)
-	`, m.ID, p.YesReserve, p.NoReserve, p.K, p.TotalCollateral)
+		INSERT INTO pools (market_id, yes_reserve, no_reserve, total_collateral)
+		VALUES ($1,$2,$3,$4)
+	`, m.ID, p.YesReserve, p.NoReserve, p.TotalCollateral)
 	if err != nil {
 		return fmt.Errorf("insert pool: %w", err)
 	}
@@ -57,7 +58,7 @@ func (r *Repository) Create(ctx context.Context, m *Market, p *Pool) error {
 		return fmt.Errorf("debit creator: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("insufficient balance")
+		return httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough points to create this market.", nil)
 	}
 
 	return tx.Commit(ctx)
@@ -71,7 +72,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 		       m.creator_id, m.resolver_id, m.status, m.outcome, m.evidence_url,
 		       m.initial_liquidity, m.closes_at, m.resolves_at, m.created_at,
 		       m.resolved_at, m.dispute_deadline,
-		       p.yes_reserve, p.no_reserve, p.k, p.total_collateral
+		       p.yes_reserve, p.no_reserve, p.total_collateral
 		FROM markets m
 		JOIN pools p ON p.market_id = m.id
 		WHERE m.id = $1
@@ -80,7 +81,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 		&m.CreatorID, &m.ResolverID, &m.Status, &m.Outcome, &m.EvidenceURL,
 		&m.InitialLiquidity, &m.ClosesAt, &m.ResolvesAt, &m.CreatedAt,
 		&m.ResolvedAt, &m.DisputeDeadline,
-		&p.YesReserve, &p.NoReserve, &p.K, &p.TotalCollateral,
+		&p.YesReserve, &p.NoReserve, &p.TotalCollateral,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get market: %w", err)
@@ -91,7 +92,10 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*Market, *Pool,
 	return m, p, nil
 }
 
-func (r *Repository) List(ctx context.Context, category Category, status Status) ([]*Market, error) {
+func (r *Repository) List(ctx context.Context, category Category, status Status, limit int) ([]*Market, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT m.id, m.question, m.description, m.category,
 		       m.creator_id, m.resolver_id, m.status, m.outcome, m.evidence_url,
@@ -103,7 +107,8 @@ func (r *Repository) List(ctx context.Context, category Category, status Status)
 		WHERE ($1 = '' OR m.category = $1::market_category)
 		  AND ($2 = '' OR m.status   = $2::market_status)
 		ORDER BY m.created_at DESC
-	`, string(category), string(status))
+		LIMIT $3
+	`, string(category), string(status), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list markets: %w", err)
 	}
@@ -148,24 +153,80 @@ func (r *Repository) Resolve(ctx context.Context, p ResolveParams) error {
 		return fmt.Errorf("resolve: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("market not found, wrong resolver, or not open")
+		return httpx.NewError(409, httpx.CodeInvalidState, "Market not found, wrong resolver, or not open.", nil)
 	}
 	return nil
 }
 
 func (r *Repository) Dispute(ctx context.Context, marketID, userID uuid.UUID, reason string) error {
-	_, err := r.db.Exec(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin dispute tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status Status
+	var deadline *time.Time
+	if err := tx.QueryRow(ctx, `SELECT status, dispute_deadline FROM markets WHERE id = $1 FOR UPDATE`, marketID).Scan(&status, &deadline); err != nil {
+		return httpx.NewError(404, httpx.CodeNotFound, "Market not found.", err)
+	}
+	if status != StatusResolved {
+		return httpx.NewError(409, httpx.CodeInvalidState, "This market cannot be disputed right now.", nil)
+	}
+	if deadline == nil || !deadline.After(time.Now()) {
+		return httpx.NewError(409, httpx.CodeDisputeClosed, "This dispute window has closed.", nil)
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO disputes (market_id, user_id, reason)
 		VALUES ($1, $2, $3)
 	`, marketID, userID, reason)
 	if err != nil {
 		return fmt.Errorf("file dispute: %w", err)
 	}
-	// Mark market as disputed
-	_, err = r.db.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		UPDATE markets SET status = 'disputed'
-		WHERE id = $1 AND status = 'resolved'
-		  AND dispute_deadline > NOW()
+		WHERE id = $1
 	`, marketID)
-	return err
+	if err != nil {
+		return fmt.Errorf("mark disputed: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) ReviewDispute(ctx context.Context, marketID, adminID uuid.UUID, action DisputeAction, outcome *Outcome, evidenceURL *string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin dispute review tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status Status
+	if err := tx.QueryRow(ctx, `SELECT status FROM markets WHERE id = $1 FOR UPDATE`, marketID).Scan(&status); err != nil {
+		return httpx.NewError(404, httpx.CodeNotFound, "Market not found.", err)
+	}
+	if status != StatusDisputed {
+		return httpx.NewError(409, httpx.CodeInvalidState, "This market is not awaiting dispute review.", nil)
+	}
+
+	switch action {
+	case DisputeActionConfirmOriginal:
+		_, err = tx.Exec(ctx, `UPDATE markets SET status = 'resolved' WHERE id = $1`, marketID)
+	case DisputeActionOverrideOutcome:
+		if outcome == nil || evidenceURL == nil {
+			return httpx.NewError(400, httpx.CodeValidation, "Override outcome requires a new outcome and evidence link.", nil)
+		}
+		_, err = tx.Exec(ctx, `UPDATE markets SET status = 'resolved', outcome = $1, evidence_url = $2, payout_at = NULL WHERE id = $3`, string(*outcome), *evidenceURL, marketID)
+	case DisputeActionCancelMarket:
+		cancelled := OutcomeCancelled
+		_, err = tx.Exec(ctx, `UPDATE markets SET status = 'cancelled', outcome = $1, payout_at = NULL WHERE id = $2`, string(cancelled), marketID)
+	default:
+		return httpx.NewError(400, httpx.CodeValidation, "Invalid dispute action.", nil)
+	}
+	if err != nil {
+		return fmt.Errorf("apply dispute action: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE disputes SET resolved_by = $1, resolved_at = NOW() WHERE market_id = $2 AND resolved_at IS NULL`, adminID, marketID); err != nil {
+		return fmt.Errorf("mark disputes reviewed: %w", err)
+	}
+	return tx.Commit(ctx)
 }

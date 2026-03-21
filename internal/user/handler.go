@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/naranjax/inhousepredictor/internal/auth"
+	"github.com/naranjax/inhousepredictor/internal/httpx"
 )
 
 type Handler struct {
@@ -23,15 +24,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
 	u, err := h.svc.Register(r.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httpx.WriteError(w, err)
 		return
 	}
-	respond(w, http.StatusCreated, u)
+	httpx.WriteJSON(w, http.StatusCreated, u)
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -40,38 +41,32 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
 	u, err := h.svc.Authenticate(r.Context(), req.Email, req.Password)
 	if err != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Invalid credentials.", err))
 		return
 	}
 	token, err := auth.NewToken(u.ID, u.IsAdmin, h.jwtSecret)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, "Internal server error.", err))
 		return
 	}
-	respond(w, http.StatusOK, map[string]any{"token": token, "user": u})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"token": token, "user": u})
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.WriteError(w, httpx.NewError(http.StatusUnauthorized, httpx.CodeUnauthorized, "Unauthorized.", nil))
 		return
 	}
 	u, err := h.svc.GetByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, httpx.NewError(http.StatusNotFound, httpx.CodeNotFound, "Not found.", err))
 		return
 	}
-	respond(w, http.StatusOK, u)
-}
-
-func respond(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	httpx.WriteJSON(w, http.StatusOK, u)
 }
