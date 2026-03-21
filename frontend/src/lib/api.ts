@@ -34,7 +34,8 @@ export const API_BASE_URL = trimSlash(
 );
 
 export function getWsUrl(token: string, marketId?: string) {
-  const wsOrigin = window.location.origin.replace(/^http/, 'ws');
+  const localDevHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const wsOrigin = localDevHost ? 'ws://127.0.0.1:8080' : window.location.origin.replace(/^http/, 'ws');
   const wsBase = API_BASE_URL.startsWith('http') ? API_BASE_URL.replace(/^http/, 'ws') : `${wsOrigin}${API_BASE_URL}`;
   const url = new URL(`${wsBase}/ws`);
   url.searchParams.set('token', token);
