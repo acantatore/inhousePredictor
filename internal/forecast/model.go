@@ -37,6 +37,8 @@ type Question struct {
 	ResolutionRule           string           `json:"resolution_rule"`
 	RationalePolicyThreshold int              `json:"rationale_policy_threshold"`
 	LinkedMarketID           *uuid.UUID       `json:"linked_market_id,omitempty"`
+	LinkedMarketYesPrice     float64          `json:"linked_market_yes_price,omitempty"`
+	LinkedMarketNoPrice      float64          `json:"linked_market_no_price,omitempty"`
 	ClosesAt                 time.Time        `json:"closes_at"`
 	ResolvesAt               time.Time        `json:"resolves_at"`
 	ResolvedAt               *time.Time       `json:"resolved_at,omitempty"`

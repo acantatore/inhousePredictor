@@ -75,10 +75,12 @@ func (r *Repository) ListQuestions(ctx context.Context, program string, status Q
 		       fq.status, fq.outcome, fq.resolution_rule, fq.rationale_policy_threshold,
 		       fq.linked_market_id, fq.closes_at, fq.resolves_at, fq.resolved_at,
 		       fq.evidence_url, fq.created_at, fq.updated_at,
+		       COALESCE(mp.yes_reserve, 0), COALESCE(mp.no_reserve, 0),
 		       COALESCE(fp.official_probability_bps, 0), COALESCE(fp.current_risk_bps, 0), COALESCE(fp.contributor_count, 0), COALESCE(fp.last_change_bps, 0), COALESCE(fp.updated_at, fq.updated_at)
 		FROM forecast_questions fq
 		JOIN users owner ON owner.id = fq.owner_id
 		JOIN users resolver ON resolver.id = fq.resolver_id
+		LEFT JOIN pools mp ON mp.market_id = fq.linked_market_id
 		LEFT JOIN forecast_projections fp ON fp.forecast_question_id = fq.id
 		WHERE ($1 = '' OR fq.program = $1)
 		  AND ($2 = '' OR fq.status = NULLIF($2, '')::forecast_question_status)
@@ -92,17 +94,23 @@ func (r *Repository) ListQuestions(ctx context.Context, program string, status Q
 	var questions []*Question
 	for rows.Next() {
 		q := &Question{Projection: &Projection{}}
+		var marketYesReserve, marketNoReserve float64
 		if err := rows.Scan(
 			&q.ID, &q.Title, &q.Description, &q.Program,
 			&q.OwnerID, &q.OwnerName, &q.ResolverID, &q.ResolverName,
 			&q.Status, &q.Outcome, &q.ResolutionRule, &q.RationalePolicyThreshold,
 			&q.LinkedMarketID, &q.ClosesAt, &q.ResolvesAt, &q.ResolvedAt,
 			&q.EvidenceURL, &q.CreatedAt, &q.UpdatedAt,
+			&marketYesReserve, &marketNoReserve,
 			&q.Projection.OfficialProbabilityBps, &q.Projection.CurrentRiskBps, &q.Projection.ContributorCount, &q.Projection.LastChangeBps, &q.Projection.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan question: %w", err)
 		}
 		q.Projection.ForecastQuestionID = q.ID
+		if total := marketYesReserve + marketNoReserve; total > 0 {
+			q.LinkedMarketYesPrice = marketNoReserve / total
+			q.LinkedMarketNoPrice = marketYesReserve / total
+		}
 		questions = append(questions, q)
 	}
 	return questions, rows.Err()
@@ -114,16 +122,19 @@ func (r *Repository) GetQuestion(ctx context.Context, questionID uuid.UUID) (*Qu
 	var linkedMarketID *uuid.UUID
 	var resolvedAt *time.Time
 	var evidenceURL *string
+	var marketYesReserve, marketNoReserve float64
 	err := r.db.QueryRow(ctx, `
 		SELECT fq.id, fq.title, fq.description, fq.program,
 		       fq.owner_id, owner.name, fq.resolver_id, resolver.name,
 		       fq.status, fq.outcome, fq.resolution_rule, fq.rationale_policy_threshold,
 		       fq.linked_market_id, fq.closes_at, fq.resolves_at, fq.resolved_at,
 		       fq.evidence_url, fq.created_at, fq.updated_at,
+		       COALESCE(mp.yes_reserve, 0), COALESCE(mp.no_reserve, 0),
 		       COALESCE(fp.official_probability_bps, 0), COALESCE(fp.current_risk_bps, 0), COALESCE(fp.contributor_count, 0), COALESCE(fp.last_change_bps, 0), COALESCE(fp.updated_at, fq.updated_at)
 		FROM forecast_questions fq
 		JOIN users owner ON owner.id = fq.owner_id
 		JOIN users resolver ON resolver.id = fq.resolver_id
+		LEFT JOIN pools mp ON mp.market_id = fq.linked_market_id
 		LEFT JOIN forecast_projections fp ON fp.forecast_question_id = fq.id
 		WHERE fq.id = $1
 	`, questionID).Scan(
@@ -132,6 +143,7 @@ func (r *Repository) GetQuestion(ctx context.Context, questionID uuid.UUID) (*Qu
 		&q.Status, &outcomeText, &q.ResolutionRule, &q.RationalePolicyThreshold,
 		&linkedMarketID, &q.ClosesAt, &q.ResolvesAt, &resolvedAt,
 		&evidenceURL, &q.CreatedAt, &q.UpdatedAt,
+		&marketYesReserve, &marketNoReserve,
 		&q.Projection.OfficialProbabilityBps, &q.Projection.CurrentRiskBps, &q.Projection.ContributorCount, &q.Projection.LastChangeBps, &q.Projection.UpdatedAt,
 	)
 	if err != nil {
@@ -148,6 +160,10 @@ func (r *Repository) GetQuestion(ctx context.Context, questionID uuid.UUID) (*Qu
 	q.ResolvedAt = resolvedAt
 	q.EvidenceURL = evidenceURL
 	q.Projection.ForecastQuestionID = q.ID
+	if total := marketYesReserve + marketNoReserve; total > 0 {
+		q.LinkedMarketYesPrice = marketNoReserve / total
+		q.LinkedMarketNoPrice = marketYesReserve / total
+	}
 
 	contributors, err := r.getContributors(ctx, questionID)
 	if err != nil {

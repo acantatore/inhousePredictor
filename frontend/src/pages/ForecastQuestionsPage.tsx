@@ -69,8 +69,8 @@ export function ForecastQuestionsPage() {
                 </div>
                 <div className="info-grid">
                   <div className="stack-sm">
-                    <span className="eyebrow">Official forecast</span>
-                    <strong>{formatBpsPercent(question.projection?.official_probability_bps || 0)}</strong>
+                    <span className="eyebrow">Market signal</span>
+                    <strong>{typeof question.linked_market_yes_price === 'number' ? formatBpsPercent(Math.round(question.linked_market_yes_price * 10000)) : formatBpsPercent(question.projection?.official_probability_bps || 0)}</strong>
                   </div>
                   <div className="stack-sm">
                     <span className="eyebrow">Current risk</span>

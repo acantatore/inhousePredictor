@@ -146,6 +146,8 @@ export interface ForecastQuestion {
   resolution_rule: string;
   rationale_policy_threshold: number;
   linked_market_id?: string | null;
+  linked_market_yes_price?: number;
+  linked_market_no_price?: number;
   closes_at: string;
   resolves_at: string;
   resolved_at?: string | null;

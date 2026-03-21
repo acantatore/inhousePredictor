@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import type { ExternalSignalSnapshot, ForecastQuestion, ForecastQuestionOutcome } from '../types';
+import type { ExternalSignalSnapshot, ForecastQuestion, ForecastQuestionOutcome, Market } from '../types';
 import { Card, EmptyState, ErrorState, Field, InlineNotice, LoadingState, SectionHeader, StatusPill, TextArea } from '../components/ui';
 import { formatBpsPercent, formatDate } from '../lib/utils';
+import { TradeTicket } from '../components/TradeTicket';
 
 export function ForecastQuestionPage() {
   const { id = '' } = useParams();
-  const { token, user } = useAuth();
+  const { token, user, refreshUser } = useAuth();
   const [question, setQuestion] = useState<ForecastQuestion | null>(null);
+  const [linkedMarket, setLinkedMarket] = useState<Market | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [probability, setProbability] = useState(6200);
@@ -26,6 +28,11 @@ export function ForecastQuestionPage() {
       .then((item) => {
         setQuestion(item);
         setProbability(item.projection?.official_probability_bps || 5000);
+        if (item.linked_market_id) {
+          void api.getMarket(token, item.linked_market_id).then(setLinkedMarket).catch(() => setLinkedMarket(null));
+        } else {
+          setLinkedMarket(null);
+        }
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load this commitment forecast.'))
       .finally(() => setIsLoading(false));
@@ -39,6 +46,10 @@ export function ForecastQuestionPage() {
       setQuestion(next);
       setRationale('');
       setError(null);
+      if (next.linked_market_id) {
+        const nextMarket = await api.getMarket(token, next.linked_market_id);
+        setLinkedMarket(nextMarket);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save this forecast.');
     }
@@ -50,6 +61,10 @@ export function ForecastQuestionPage() {
       const next = await api.resolveForecastQuestion(token, id, { outcome, evidence_url: 'https://example.com/evidence/roadmap-forecast' });
       setQuestion(next);
       setError(null);
+      if (next.linked_market_id) {
+        const nextMarket = await api.getMarket(token, next.linked_market_id);
+        setLinkedMarket(nextMarket);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not resolve this commitment.');
     }
@@ -63,9 +78,20 @@ export function ForecastQuestionPage() {
       const next = await api.getForecastQuestion(token, id);
       setQuestion(next);
       setError(null);
+      if (next.linked_market_id) {
+        const nextMarket = await api.getMarket(token, next.linked_market_id);
+        setLinkedMarket(nextMarket);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add the external signal.');
     }
+  }
+
+  async function reloadLinkedMarket() {
+    if (!token || !question?.linked_market_id) return;
+    const nextMarket = await api.getMarket(token, question.linked_market_id);
+    setLinkedMarket(nextMarket);
+    await refreshUser();
   }
 
   if (isLoading) {
@@ -84,6 +110,11 @@ export function ForecastQuestionPage() {
         <SectionHeader title={question.title} copy={question.description} action={<StatusPill status={question.status as any} />} />
         <div className="info-grid">
           <div className="stat-card">
+            <span>Market signal</span>
+            <strong>{linkedMarket ? formatBpsPercent(Math.round(linkedMarket.yes_price * 10000)) : 'Pending'}</strong>
+            <small>Tradeable commitment signal derived from the paired market.</small>
+          </div>
+          <div className="stat-card">
             <span>Official internal forecast</span>
             <strong>{formatBpsPercent(question.projection?.official_probability_bps || 0)}</strong>
             <small>Median of the latest active contributor forecasts.</small>
@@ -94,14 +125,9 @@ export function ForecastQuestionPage() {
             <small>Displayed as `1 - official forecast`.</small>
           </div>
           <div className="stat-card">
-            <span>Contributors</span>
-            <strong>{question.projection?.contributor_count || 0}</strong>
-            <small>Curated inputs shape the phase 1 official forecast.</small>
-          </div>
-          <div className="stat-card">
-            <span>Paired market</span>
-            <strong>{question.linked_market_id ? 'Shadow market ready' : 'Pending'}</strong>
-            <small>Exists for advanced comparison only, never as the official truth.</small>
+            <span>Shadow market</span>
+            <strong>{question.linked_market_id ? 'Trade enabled' : 'Pending'}</strong>
+            <small>The paired market is available for betting directly on this commitment.</small>
           </div>
         </div>
         <div className="row row-wrap">
@@ -115,6 +141,11 @@ export function ForecastQuestionPage() {
       {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
 
       <div className="two-column-layout">
+        <div className="stack-md">
+          <InlineNotice tone="neutral">For commitments, the paired market is now the primary participation surface. Trade here to express conviction with points.</InlineNotice>
+          {linkedMarket && user && token ? <TradeTicket market={linkedMarket} token={token} user={user} onTraded={reloadLinkedMarket} /> : <InlineNotice tone="warning">The paired market is still being prepared.</InlineNotice>}
+        </div>
+
         <Card className="stack-md">
           <SectionHeader title="Forecast update" copy="Submit a direct probability and explain why it changed. Revisions are append-only." />
           {isContributor && question.status === 'open' ? (
@@ -137,6 +168,7 @@ export function ForecastQuestionPage() {
           <SectionHeader title="Signal comparison" copy="The paired market and any external source stay secondary. The official internal forecast remains the canonical answer." />
           <div className="stack-sm">
             <div className="activity-row"><span>Official internal forecast</span><strong>{formatBpsPercent(question.projection?.official_probability_bps || 0)}</strong></div>
+            {linkedMarket ? <div className="activity-row"><span>Paired market YES price</span><strong>{formatBpsPercent(Math.round(linkedMarket.yes_price * 10000))}</strong></div> : null}
             {question.external_signals?.map((item) => (
               <div className="activity-row" key={item.id}><span>{item.source}</span><strong>{formatBpsPercent(item.probability_bps)}</strong></div>
             ))}
