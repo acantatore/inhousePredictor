@@ -762,6 +762,15 @@ a:focus-visible {
 
   .auth-layout {
     padding: 16px;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .auth-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .auth-copy h1 {
