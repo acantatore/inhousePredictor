@@ -297,8 +297,10 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 			WHERE user_id = $1 AND market_option_id = $2
 		`, p.UserID, *p.OptionID).Scan(&userShares)
 		if err != nil {
+			fmt.Printf("[DEBUG] Sell failed - no position found for user=%s option=%s: %v\n", p.UserID, *p.OptionID, err)
 			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have a position in this option.", err)
 		}
+		fmt.Printf("[DEBUG] Sell - user has %.2f shares, trying to sell %d shares\n", userShares, p.Cost)
 
 		shares = float64(p.Cost) // p.Cost contains shares to sell for sell orders
 		if userShares < shares {
