@@ -77,10 +77,16 @@ export function TradeTicket({
 
     try {
       setIsSubmitting(true);
-      const side: TradeSide = mode === 'buy'
-        ? selectedOption?.label.toLowerCase() as TradeSide
-        : (`sell_${selectedOption?.label.toLowerCase()}` as TradeSide);
-      console.log('[DEBUG] Sending trade:', { mode, side, cost, option_id: selectedOption?.id });
+      // For multi-option markets (>2 options), always use SideYes/SideSellYes
+      // The option_id identifies which option is being traded
+      const isMultiOption = market.options && market.options.length > 2;
+      let side: TradeSide;
+      if (mode === 'buy') {
+        side = isMultiOption ? 'yes' : selectedOption?.label.toLowerCase() as TradeSide;
+      } else {
+        side = isMultiOption ? 'sell_yes' : (`sell_${selectedOption?.label.toLowerCase()}` as TradeSide);
+      }
+      console.log('[DEBUG] Sending trade:', { mode, side, cost, option_id: selectedOption?.id, isMultiOption });
       await api.trade(token, market.id, { side, option_id: selectedOption?.id, cost });
       setMessage(mode === 'buy' ? 'Trade placed. Your balance and market signal are refreshing now.' : 'Shares sold. Your balance has been updated.');
       setCost(200);
