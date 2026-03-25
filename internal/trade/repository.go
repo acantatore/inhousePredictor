@@ -291,17 +291,32 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 
 	if isSell {
 		// Handle sell order for multi-option market
-		// Check user's position
+		// Check user's position in option_positions first, then fall back to positions table
 		var userShares float64
 		err = tx.QueryRow(ctx, `
 			SELECT shares FROM option_positions
 			WHERE user_id = $1 AND market_option_id = $2
 		`, p.UserID, *p.OptionID).Scan(&userShares)
+
+		useBinaryPosition := false
+		var yesShares, noShares float64
 		if err != nil {
-			fmt.Printf("[DEBUG] Sell failed - no position found for user=%s option=%s: %v\n", p.UserID, *p.OptionID, err)
-			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have a position in this option.", err)
+			// Try positions table (for binary markets bought through execute())
+			err2 := tx.QueryRow(ctx, `
+				SELECT yes_shares, no_shares FROM positions
+				WHERE user_id = $1 AND market_id = $2
+			`, p.UserID, p.MarketID).Scan(&yesShares, &noShares)
+			if err2 != nil {
+				return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have a position in this option.", err)
+			}
+			useBinaryPosition = true
+			// Determine which shares to use based on option label
+			if selected.label == "YES" {
+				userShares = yesShares
+			} else {
+				userShares = noShares
+			}
 		}
-		fmt.Printf("[DEBUG] Sell - user has %.2f shares, trying to sell %d shares\n", userShares, p.Cost)
 
 		shares = float64(p.Cost) // p.Cost contains shares to sell for sell orders
 		if userShares < shares {
@@ -328,12 +343,29 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 		selected.collateral -= collateralReduction
 		total -= collateralReduction
 
-		// Subtract shares from position
-		if _, err := tx.Exec(ctx, `
-			UPDATE option_positions SET shares = shares - $1
-			WHERE user_id = $2 AND market_option_id = $3
-		`, shares, p.UserID, *p.OptionID); err != nil {
-			return nil, fmt.Errorf("update option position: %w", err)
+		// Subtract shares from appropriate position table
+		if useBinaryPosition {
+			// Update positions table (binary market)
+			if selected.label == "YES" {
+				_, err = tx.Exec(ctx, `
+					UPDATE positions SET yes_shares = yes_shares - $1
+					WHERE user_id = $2 AND market_id = $3
+				`, shares, p.UserID, p.MarketID)
+			} else {
+				_, err = tx.Exec(ctx, `
+					UPDATE positions SET no_shares = no_shares - $1
+					WHERE user_id = $2 AND market_id = $3
+				`, shares, p.UserID, p.MarketID)
+			}
+		} else {
+			// Update option_positions table (multi-option market)
+			_, err = tx.Exec(ctx, `
+				UPDATE option_positions SET shares = shares - $1
+				WHERE user_id = $2 AND market_option_id = $3
+			`, shares, p.UserID, *p.OptionID)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("update position: %w", err)
 		}
 	} else {
 		// Handle buy order (existing logic)
