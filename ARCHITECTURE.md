@@ -286,10 +286,10 @@ First admin bootstrap is supported with `BOOTSTRAP_ADMIN_EMAIL`.
 
 ### P2 — Before general availability
 
-- Sell/exit mechanism (currently buy-only)
-- Structured logging (`slog`)
+- [x] **Sell/exit mechanism** — ✅ IMPLEMENTED. Users can now sell shares back to the pool before market resolution.
+- [x] **Structured logging (`slog`)** — ✅ IMPLEMENTED
 - Full cursor-based market list pagination beyond bounded launch query behavior
-- Creator trading restriction enforcement (policy is now locked: creators cannot trade their own markets)
+- [x] **Creator trading restriction enforcement** — ✅ IMPLEMENTED (policy locked: creators cannot trade their own markets)
 
 ### P3 — Nice to have
 
@@ -308,5 +308,5 @@ First admin bootstrap is supported with `BOOTSTRAP_ADMIN_EMAIL`.
 - **Admin panel** — No frontend surface for dispute resolution or user management
 - **Rate limiting** — No request throttling
 - **CI/CD** — No pipeline or linting config
-- **Sell/exit trades** — Users can only buy, not exit positions
+
 - **Frontend** — Still not built
