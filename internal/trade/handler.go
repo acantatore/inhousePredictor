@@ -2,6 +2,7 @@ package trade
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -38,6 +39,8 @@ func (h *Handler) Trade(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
+	// Debug logging
+	fmt.Printf("[DEBUG] Trade request - Side: %q, Cost: %d, OptionID: %v\n", req.Side, req.Cost, req.OptionID)
 	// Validate side - for binary markets (no option_id), allow: yes, no, sell_yes, sell_no
 	// For multi-option markets (with option_id), any side is valid
 	if req.OptionID == nil {
