@@ -282,6 +282,7 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 
 	// Check if this is a sell order
 	isSell := p.Side == SideSellYes || p.Side == SideSellNo
+	fmt.Printf("[DEBUG] executeMulti - Side: %q, isSell: %v, OptionID: %v, Cost: %d\n", p.Side, isSell, p.OptionID, p.Cost)
 
 	var shares float64
 	var proceeds int64
