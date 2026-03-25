@@ -201,7 +201,7 @@ export function MarketDetailPage() {
       </div>
 
       <aside className="detail-side">
-        <TradeTicket market={market} token={token} user={user} onTraded={handleAfterTrade} />
+        <TradeTicket market={market} token={token} user={user} positions={positions} onTraded={handleAfterTrade} />
       </aside>
     </div>
   );

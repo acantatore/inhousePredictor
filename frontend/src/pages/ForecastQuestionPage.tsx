@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import type { ExternalSignalSnapshot, ForecastQuestion, ForecastQuestionOutcome, Market } from '../types';
+import type { ExternalSignalSnapshot, ForecastQuestion, ForecastQuestionOutcome, Market, Position } from '../types';
 import { Card, EmptyState, ErrorState, Field, InlineNotice, LoadingState, SectionHeader, StatusPill, TextArea } from '../components/ui';
 import { formatBpsPercent, formatDate } from '../lib/utils';
 import { TradeTicket } from '../components/TradeTicket';
@@ -12,6 +12,7 @@ export function ForecastQuestionPage() {
   const { token, user, refreshUser } = useAuth();
   const [question, setQuestion] = useState<ForecastQuestion | null>(null);
   const [linkedMarket, setLinkedMarket] = useState<Market | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [probability, setProbability] = useState(6200);
@@ -30,8 +31,10 @@ export function ForecastQuestionPage() {
         setProbability(item.projection?.official_probability_bps || 5000);
         if (item.linked_market_id) {
           void api.getMarket(token, item.linked_market_id).then(setLinkedMarket).catch(() => setLinkedMarket(null));
+          void api.getPositions(token).then(setPositions).catch(() => setPositions([]));
         } else {
           setLinkedMarket(null);
+          setPositions([]);
         }
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load this commitment forecast.'))
@@ -89,8 +92,12 @@ export function ForecastQuestionPage() {
 
   async function reloadLinkedMarket() {
     if (!token || !question?.linked_market_id) return;
-    const nextMarket = await api.getMarket(token, question.linked_market_id);
+    const [nextMarket, nextPositions] = await Promise.all([
+      api.getMarket(token, question.linked_market_id),
+      api.getPositions(token),
+    ]);
     setLinkedMarket(nextMarket);
+    setPositions(nextPositions || []);
     await refreshUser();
   }
 
@@ -143,7 +150,7 @@ export function ForecastQuestionPage() {
       <div className="two-column-layout">
         <div className="stack-md">
           <InlineNotice tone="neutral">For commitments, the paired market is now the primary participation surface. Trade here to express conviction with points.</InlineNotice>
-          {linkedMarket && user && token ? <TradeTicket market={linkedMarket} token={token} user={user} onTraded={reloadLinkedMarket} /> : <InlineNotice tone="warning">The paired market is still being prepared.</InlineNotice>}
+          {linkedMarket && user && token ? <TradeTicket market={linkedMarket} token={token} user={user} positions={positions} onTraded={reloadLinkedMarket} /> : <InlineNotice tone="warning">The paired market is still being prepared.</InlineNotice>}
         </div>
 
         <Card className="stack-md">

@@ -1,7 +1,7 @@
 export type Category = 'people' | 'okrs' | 'slas' | 'financials' | 'general';
 export type MarketStatus = 'open' | 'closed' | 'resolved' | 'disputed' | 'cancelled';
 export type Outcome = 'yes' | 'no' | 'cancelled';
-export type TradeSide = 'yes' | 'no';
+export type TradeSide = 'yes' | 'no' | 'sell_yes' | 'sell_no';
 export type DisputeAction = 'confirm_original' | 'override_outcome' | 'cancel_market';
 export type ForecastQuestionStatus = 'open' | 'closed' | 'resolved' | 'cancelled';
 export type ForecastQuestionOutcome = 'delivered' | 'not_delivered' | 'cancelled';
