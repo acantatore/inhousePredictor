@@ -188,8 +188,13 @@ export function MarketDetailPage() {
             <div className="stack-sm">
               {trades.slice(0, 6).map((trade, index) => (
                 <div className="activity-row" key={`${trade.id}-${index}`}>
-                  <span>{trade.side === 'yes' ? 'YES buy' : 'NO buy'}</span>
-                  <strong>{formatPoints(trade.cost)}</strong>
+                  <span>
+                    {trade.side === 'yes' ? 'YES buy' :
+                     trade.side === 'no' ? 'NO buy' :
+                     trade.side === 'sell_yes' ? 'YES sell' :
+                     trade.side === 'sell_no' ? 'NO sell' : trade.side}
+                  </span>
+                  <strong>{formatPoints(Math.abs(trade.cost))}</strong>
                   <small>{formatDate(trade.created_at)}</small>
                 </div>
               ))}
