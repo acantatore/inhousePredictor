@@ -4,6 +4,7 @@ import { api, ApiError, getWsUrl } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { formatBpsPercent, formatDate, formatPoints, getMarketOptions, getPositionForMarket, marketLeader, sentimentClass, sentimentLabel } from '../lib/utils';
 import type { Market, Position, Trade, WsPriceUpdate } from '../types';
+import { MarketProbabilityChart } from '../components/MarketProbabilityChart';
 import { TradeTicket } from '../components/TradeTicket';
 import { Card, DeadlineBlock, EmptyState, ErrorState, InlineNotice, LoadingState, SectionHeader, StatusPill } from '../components/ui';
 
@@ -134,7 +135,7 @@ export function MarketDetailPage() {
               </Card>
             ))}
           </div>
-          <ProbabilityChart market={market} />
+          <MarketProbabilityChart market={market} />
           <div className="deadline-grid">
             <DeadlineBlock label="Closes" value={market.closes_at} />
             <DeadlineBlock label="Resolves" value={market.resolves_at} />
@@ -203,38 +204,5 @@ export function MarketDetailPage() {
         <TradeTicket market={market} token={token} user={user} onTraded={handleAfterTrade} />
       </aside>
     </div>
-  );
-}
-
-function ProbabilityChart({ market }: { market: Market }) {
-  if (!market.snapshots || market.snapshots.length < 2) {
-    return <InlineNotice tone="neutral">Live line chart will appear after this market has more probability history.</InlineNotice>;
-  }
-  const options = getMarketOptions(market);
-  const width = 640;
-  const height = 220;
-  const padding = 20;
-  const maxX = Math.max(market.snapshots.length - 1, 1);
-  const colors = ['#2f8f5b', '#b8574f', '#587081', '#b77b27', '#8f6ab0'];
-
-  return (
-    <Card className="chart-card">
-      <SectionHeader title="Live probability chart" copy="Track how option probabilities moved over time, not just where they are now." />
-      <svg viewBox={`0 0 ${width} ${height}`} className="market-chart" role="img" aria-label="Market probability chart">
-        {options.map((option, optionIndex) => {
-          const points = market.snapshots!.map((snapshot, snapshotIndex) => {
-            const total = Object.values(snapshot.points || {}).reduce((sum, value) => sum + value, 0) || 1;
-            const probability = (snapshot.points?.[option.label] || 0) / total;
-            const x = padding + ((width - padding * 2) * snapshotIndex) / maxX;
-            const y = height - padding - probability * (height - padding * 2);
-            return `${x},${y}`;
-          }).join(' ');
-          return <polyline key={option.id} fill="none" stroke={colors[optionIndex % colors.length]} strokeWidth="3" points={points} />;
-        })}
-      </svg>
-      <div className="row row-wrap">
-        {options.map((option, optionIndex) => <span className="position-chip" key={option.id} style={{ borderColor: colors[optionIndex % colors.length] }}>{option.label}</span>)}
-      </div>
-    </Card>
   );
 }

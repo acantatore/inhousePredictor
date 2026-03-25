@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, getWsUrl } from '../lib/api';
-import { categories, getPositionForMarket, marketLeader, partitionMarkets, sentimentClass, sentimentLabel } from '../lib/utils';
+import { categories, formatBpsPercent, formatDate, getMarketOptions, getPositionForMarket, marketLeader, partitionMarkets, sentimentClass, sentimentLabel } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import type { Market, Position, WsPriceUpdate } from '../types';
+import { MarketProbabilityChart, marketOptionColor } from '../components/MarketProbabilityChart';
 import { MarketRow } from '../components/MarketRow';
 import { Card, EmptyState, ErrorState, LoadingState, SectionHeader, StatusPill } from '../components/ui';
 
@@ -17,6 +18,7 @@ export function MarketsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<'connecting' | 'live' | 'offline'>('connecting');
+  const [standoutIndex, setStandoutIndex] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -84,6 +86,26 @@ export function MarketsPage() {
   }, [token]);
 
   const sections = useMemo(() => partitionMarkets(markets), [markets]);
+  const standoutMarkets = useMemo(() => {
+    const openMarkets = markets.filter((market) => market.status === 'open');
+    const ranked = [...openMarkets].sort((a, b) => {
+      const aVolume = (a.options || []).reduce((sum, option) => sum + option.collateral, a.initial_liquidity);
+      const bVolume = (b.options || []).reduce((sum, option) => sum + option.collateral, b.initial_liquidity);
+      return bVolume - aVolume;
+    });
+    const multiOption = ranked.filter((market) => (market.options || []).length > 2);
+    return (multiOption.length > 0 ? multiOption : ranked).slice(0, 3);
+  }, [markets]);
+  const standoutMarket = standoutMarkets[standoutIndex] || null;
+
+  useEffect(() => {
+    setStandoutIndex((current) => {
+      if (standoutMarkets.length === 0) {
+        return 0;
+      }
+      return Math.min(current, standoutMarkets.length - 1);
+    });
+  }, [standoutMarkets]);
 
   if (isLoading) {
     return <LoadingState title="Loading markets" copy="Pulling together what needs attention now, plus your current positions." />;
@@ -95,12 +117,12 @@ export function MarketsPage() {
 
   return (
     <div className="stack-lg">
-      <Card className="hero-card">
+      <Card className="hero-card hero-card-condensed">
         <div>
           <p className="eyebrow">Markets</p>
-          <h2>Forecast the questions your team already talks about.</h2>
+          <h2>The market screen should read like a live tape, not a backlog.</h2>
           <p>
-            Browse what is closing soon, see the current crowd signal, and jump into a market when you have enough context to contribute.
+            Scan movers, read dominant sentiment fast, and open the one market that actually deserves your attention now.
           </p>
         </div>
         <div className="hero-side">
@@ -149,24 +171,34 @@ export function MarketsPage() {
       </Card>
 
       <section className="stack-md">
-        <SectionHeader title="Market movers" copy="Quick pulse cards inspired by live tickers: what is moving up, what is moving down, and where sentiment is now." />
-        <div className="ticker-grid">
+        <SectionHeader title="Market movers" copy="Compressed ticker cards inspired by the tape view in `tira.png`: one glance should tell you what is moving, where sentiment sits, and which option leads." />
+        <div className="ticker-ribbon">
           {markets.slice(0, 6).map((market) => {
             const leader = marketLeader(market);
             return (
               <Link key={`${market.id}-ticker`} to={`/markets/${market.id}`} className="activity-link">
-                <Card className="ticker-card">
-                  <div className="row row-wrap">
-                    <strong>{market.question}</strong>
+                <Card className="ticker-card ticker-card-compact">
+                  <div className="row row-wrap ticker-card-top">
+                    <strong className="ticker-card-title">{market.question}</strong>
                     <span className={`position-chip ${sentimentClass(market)}`}>{sentimentLabel(market)}</span>
                   </div>
-                  <small>{leader ? `${leader.label} leads at ${Math.round(leader.probability_bps / 100)}%` : 'No signal yet'}</small>
+                  <div className="ticker-card-grid ticker-card-grid-full">
+                    {getMarketOptions(market).map((option) => (
+                      <div className="ticker-stat" key={option.id}>
+                        <span>{option.label}</span>
+                        <strong>{formatBpsPercent(option.probability_bps)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <small>{leader ? `${leader.label} leads · closes ${formatDate(market.closes_at)}` : 'No signal yet'}</small>
                 </Card>
               </Link>
             );
           })}
         </div>
       </section>
+
+      {standoutMarket ? <StandoutMarketCard market={standoutMarket} index={standoutIndex} total={standoutMarkets.length} onPrevious={() => setStandoutIndex((current) => (current === 0 ? standoutMarkets.length - 1 : current - 1))} onNext={() => setStandoutIndex((current) => (current === standoutMarkets.length - 1 ? 0 : current + 1))} /> : null}
 
       <MarketSection
         title="Closing Soon"
@@ -228,5 +260,64 @@ function MarketSection({
         </div>
       )}
     </section>
+  );
+}
+
+function StandoutMarketCard({
+  market,
+  index,
+  total,
+  onPrevious,
+  onNext,
+}: {
+  market: Market;
+  index: number;
+  total: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  const options = getMarketOptions(market).slice().sort((a, b) => b.probability_bps - a.probability_bps);
+  const palette = ['#4ccd82', '#ff6861', '#86b8ff', '#f3ae38', '#b88cff'];
+
+  return (
+    <Card className="standout-market-card">
+      <div className="standout-header">
+        <div>
+          <p className="eyebrow">Most active prediction</p>
+          <h3>{market.question}</h3>
+          <p>Inspired by `main.png`: one standout chart that makes the current probability structure and option spread legible at a glance.</p>
+        </div>
+        <div className="standout-meta">
+          <span className="position-chip">{index + 1} / {total}</span>
+          <span className={`position-chip ${sentimentClass(market)}`}>{sentimentLabel(market)}</span>
+          {total > 1 ? <button className="ghost-button" type="button" onClick={onPrevious}>Previous slide</button> : null}
+          {total > 1 ? <button className="ghost-button" type="button" onClick={onNext}>Next slide</button> : null}
+          <Link className="secondary-button" to={`/markets/${market.id}`}>Open market</Link>
+        </div>
+      </div>
+
+      <div className="standout-layout">
+        <div className="standout-legend">
+        {options.map((option, index) => (
+          <div className="standout-row" key={option.id}>
+            <div className="standout-option-label">
+              <span className="legend-dot" style={{ background: marketOptionColor(option.label, palette[index % palette.length]) }} />
+              <strong>{option.label}</strong>
+            </div>
+            <strong>{formatBpsPercent(option.probability_bps)}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="standout-chart-shell">
+          <MarketProbabilityChart
+            market={market}
+            standout
+            title="Most active prediction"
+            copy="Inspired by `main.png`: a single standout chart showing the full option spread over time."
+          />
+        </div>
+      </div>
+    </Card>
   );
 }
