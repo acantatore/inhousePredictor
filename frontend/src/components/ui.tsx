@@ -7,6 +7,7 @@ export function AppShell({
   title,
   subtitle,
   balance,
+  liveLabel,
   isAdmin,
   userName,
   onLogout,
@@ -15,6 +16,7 @@ export function AppShell({
   title?: string;
   subtitle?: string;
   balance?: number;
+  liveLabel?: string;
   isAdmin?: boolean;
   userName?: string;
   onLogout: () => void;
@@ -25,10 +27,11 @@ export function AppShell({
       <header className="topbar">
         <div>
           <p className="eyebrow">Shared company forecasting</p>
-          <h1 className="topbar-title">{title || 'InhousePredictor'}</h1>
+          <h1 className="topbar-title">{title || 'LooM'}</h1>
           {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
         </div>
         <div className="topbar-actions">
+          {liveLabel ? <span className="live-pill live-live">{liveLabel}</span> : null}
           {typeof balance === 'number' ? <span className="balance-badge">Balance {formatPoints(balance)}</span> : null}
           <div className="profile-chip">
             <span>{userName || 'Teammate'}</span>
@@ -40,13 +43,17 @@ export function AppShell({
         </div>
       </header>
 
-      <nav className="primary-nav" aria-label="Primary navigation">
-        <NavItem to="/markets">Markets</NavItem>
-        <NavItem to="/portfolio">Portfolio</NavItem>
-        <NavItem to="/create">Create Market</NavItem>
-        <NavItem to="/profile">Profile</NavItem>
-        {isAdmin ? <NavItem to="/admin/disputes">Admin</NavItem> : null}
-      </nav>
+      <div className="primary-nav-shell">
+        <nav className="primary-nav" aria-label="Primary navigation">
+          <NavItem to="/markets">Markets</NavItem>
+          <NavItem to="/portfolio">Portfolio</NavItem>
+          <NavItem to="/profile">Profile</NavItem>
+          {isAdmin ? <NavItem to="/admin/disputes">Admin</NavItem> : null}
+          <NavLink to="/create" className="primary-button nav-create-button nav-link-create">
+            Create Market
+          </NavLink>
+        </nav>
+      </div>
 
       <main className="page-shell">{children}</main>
 

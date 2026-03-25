@@ -11,6 +11,7 @@ import { Card, EmptyState, ErrorState, LoadingState, SectionHeader, StatusPill }
 export function MarketsPage() {
   const { token } = useAuth();
   const [markets, setMarkets] = useState<Market[]>([]);
+  const [standoutMarketDetail, setStandoutMarketDetail] = useState<Market | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
@@ -107,6 +108,28 @@ export function MarketsPage() {
     });
   }, [standoutMarkets]);
 
+  useEffect(() => {
+    if (!token || !standoutMarket) {
+      setStandoutMarketDetail(null);
+      return;
+    }
+    let cancelled = false;
+    api.getMarket(token, standoutMarket.id)
+      .then((market) => {
+        if (!cancelled) {
+          setStandoutMarketDetail(market);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStandoutMarketDetail(standoutMarket);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [standoutMarket?.id, token]);
+
   if (isLoading) {
     return <LoadingState title="Loading markets" copy="Pulling together what needs attention now, plus your current positions." />;
   }
@@ -117,22 +140,6 @@ export function MarketsPage() {
 
   return (
     <div className="stack-lg">
-      <Card className="hero-card hero-card-condensed">
-        <div>
-          <p className="eyebrow">Markets</p>
-          <h2>The market screen should read like a live tape, not a backlog.</h2>
-          <p>
-            Scan movers, read dominant sentiment fast, and open the one market that actually deserves your attention now.
-          </p>
-        </div>
-        <div className="hero-side">
-          <span className={`live-pill live-${liveState}`}>{liveState === 'live' ? 'Live updates connected' : liveState === 'connecting' ? 'Connecting live updates...' : 'Live updates offline'}</span>
-          <Link className="primary-button" to="/create">
-            Create market
-          </Link>
-        </div>
-      </Card>
-
       <Card className="controls-card">
         <div className="controls-grid">
           <label>
@@ -171,7 +178,7 @@ export function MarketsPage() {
       </Card>
 
       <section className="stack-md">
-        <SectionHeader title="Market movers" copy="Compressed ticker cards inspired by the tape view in `tira.png`: one glance should tell you what is moving, where sentiment sits, and which option leads." />
+        <SectionHeader title="Market movers" />
         <div className="ticker-ribbon">
           {markets.slice(0, 6).map((market) => {
             const leader = marketLeader(market);
@@ -198,7 +205,7 @@ export function MarketsPage() {
         </div>
       </section>
 
-      {standoutMarket ? <StandoutMarketCard market={standoutMarket} index={standoutIndex} total={standoutMarkets.length} onPrevious={() => setStandoutIndex((current) => (current === 0 ? standoutMarkets.length - 1 : current - 1))} onNext={() => setStandoutIndex((current) => (current === standoutMarkets.length - 1 ? 0 : current + 1))} /> : null}
+      {(standoutMarketDetail || standoutMarket) ? <StandoutMarketCard market={standoutMarketDetail || standoutMarket!} index={standoutIndex} total={standoutMarkets.length} onPrevious={() => setStandoutIndex((current) => (current === 0 ? standoutMarkets.length - 1 : current - 1))} onNext={() => setStandoutIndex((current) => (current === standoutMarkets.length - 1 ? 0 : current + 1))} /> : null}
 
       <MarketSection
         title="Closing Soon"

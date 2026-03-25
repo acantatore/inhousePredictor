@@ -38,7 +38,7 @@ export function AuthPage() {
         <p className="eyebrow">Warm, trustworthy forecasting</p>
           <h1>See what your team thinks before the next decision lands.</h1>
           <p>
-            InhousePredictor helps teams forecast the questions they care about, trade across multiple outcomes, and keep outcomes grounded in visible evidence.
+            LooM helps teams forecast the questions they care about, trade across multiple outcomes, and keep outcomes grounded in visible evidence.
           </p>
         <div className="auth-highlights">
           <Card>

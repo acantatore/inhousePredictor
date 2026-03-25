@@ -204,14 +204,32 @@ span {
 
 .primary-nav,
 .mobile-nav {
-  margin-top: 16px;
   border-radius: var(--radius-md);
   padding: 10px;
+}
+
+.primary-nav-shell {
+  margin-top: 16px;
+  display: block;
+}
+
+.primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-link-create {
+  margin-left: auto;
 }
 
 .nav-link {
   padding: 12px 16px;
   border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .nav-link-active {
@@ -293,10 +311,20 @@ span {
 }
 
 .ticker-card-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticker-card-top {
+  align-items: flex-start;
+}
+
+.ticker-card-top .position-chip {
+  flex: 0 0 auto;
 }
 
 .ticker-card-grid {
@@ -546,6 +574,10 @@ span {
   border-radius: 999px;
   border: 1px solid transparent;
   padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .trade-toggle button {
@@ -584,6 +616,12 @@ span {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+}
+
+select.input,
+select.input option {
+  background: #1a2028;
   color: var(--ink);
 }
 
@@ -701,6 +739,10 @@ a:focus-visible {
   }
 
   .primary-nav {
+    display: none;
+  }
+
+  .primary-nav-shell {
     display: none;
   }
 

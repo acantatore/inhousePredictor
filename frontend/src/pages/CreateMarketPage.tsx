@@ -101,7 +101,7 @@ export function CreateMarketPage() {
         <Field label="Options" hint="Add 2 or more outcomes. Markets can now have more than two outcomes.">
           <div className="stack-sm">
             {form.options.map((option, index) => (
-              <div className="row row-wrap" key={`${option}-${index}`}>
+              <div className="row row-wrap" key={index}>
                 <TextInput value={option} onChange={(event) => setForm((current) => ({ ...current, options: current.options.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
                 {form.options.length > 2 ? (
                   <button className="ghost-button" type="button" onClick={() => setForm((current) => ({ ...current, options: current.options.filter((_, itemIndex) => itemIndex !== index) }))}>

@@ -69,7 +69,7 @@ export function TradeTicket({
       <form className="stack-md" onSubmit={submitTrade}>
         <Field label="Points to spend" hint={`Current balance ${formatPoints(user.balance)}`}>
           <TextInput
-            min={1}
+            min={0}
             step={50}
             type="number"
             value={cost}

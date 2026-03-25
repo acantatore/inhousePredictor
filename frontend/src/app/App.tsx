@@ -26,9 +26,9 @@ function ProtectedLayout() {
     <AppShell
       balance={user.balance}
       isAdmin={user.is_admin}
+      liveLabel="Live"
       onLogout={logout}
-      subtitle="Calm signal, visible trust, and clear next steps."
-      title="InhousePredictor"
+      title="LooM"
       userName={user.name}
     >
       <Outlet />
