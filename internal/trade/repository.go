@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -416,10 +415,10 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 		YesPriceBefore: probBefore, YesPriceAfter: probAfter,
 	}
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO option_trades (user_id, market_id, market_option_id, shares, cost, probability_before, probability_after)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		INSERT INTO option_trades (user_id, market_id, market_option_id, side, shares, cost, probability_before, probability_after)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING id, created_at
-	`, trade.UserID, trade.MarketID, *trade.OptionID, trade.Shares, trade.Cost, probBefore, probAfter).Scan(&trade.ID, &trade.CreatedAt); err != nil {
+	`, trade.UserID, trade.MarketID, *trade.OptionID, string(trade.Side), trade.Shares, trade.Cost, probBefore, probAfter).Scan(&trade.ID, &trade.CreatedAt); err != nil {
 		return nil, fmt.Errorf("insert option trade: %w", err)
 	}
 	pointsJSON := "{"
@@ -521,7 +520,7 @@ func (r *Repository) GetPositions(ctx context.Context, userID uuid.UUID) ([]*Pos
 
 func (r *Repository) GetMarketTrades(ctx context.Context, marketID uuid.UUID, limit int) ([]*Trade, error) {
 	rowsNew, err := r.db.Query(ctx, `
-		SELECT ot.id, ot.user_id, ot.market_id, mo.label, ot.market_option_id, ot.shares, ot.cost, ot.probability_before, ot.probability_after, ot.created_at
+		SELECT ot.id, ot.user_id, ot.market_id, mo.label, ot.market_option_id, ot.side, ot.shares, ot.cost, ot.probability_before, ot.probability_after, ot.created_at
 		FROM option_trades ot
 		JOIN market_options mo ON mo.id = ot.market_option_id
 		WHERE ot.market_id = $1
@@ -532,10 +531,9 @@ func (r *Repository) GetMarketTrades(ctx context.Context, marketID uuid.UUID, li
 		var out []*Trade
 		for rowsNew.Next() {
 			t := &Trade{}
-			if err := rowsNew.Scan(&t.ID, &t.UserID, &t.MarketID, &t.OptionLabel, &t.OptionID, &t.Shares, &t.Cost, &t.YesPriceBefore, &t.YesPriceAfter, &t.CreatedAt); err != nil {
+			if err := rowsNew.Scan(&t.ID, &t.UserID, &t.MarketID, &t.OptionLabel, &t.OptionID, &t.Side, &t.Shares, &t.Cost, &t.YesPriceBefore, &t.YesPriceAfter, &t.CreatedAt); err != nil {
 				return nil, err
 			}
-			t.Side = Side(strings.ToLower(t.OptionLabel))
 			out = append(out, t)
 		}
 		if len(out) > 0 {

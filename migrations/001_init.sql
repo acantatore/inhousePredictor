@@ -109,6 +109,7 @@ CREATE TABLE option_trades (
     user_id             UUID             NOT NULL REFERENCES users(id),
     market_id           UUID             NOT NULL REFERENCES markets(id),
     market_option_id    UUID             NOT NULL REFERENCES market_options(id) ON DELETE CASCADE,
+    side                trade_side       NOT NULL,
     shares              DOUBLE PRECISION NOT NULL,
     cost                BIGINT           NOT NULL,
     probability_before  DOUBLE PRECISION NOT NULL,

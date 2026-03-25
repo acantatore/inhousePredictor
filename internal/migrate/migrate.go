@@ -45,6 +45,10 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	if _, err := db.Exec(ctx, `ALTER TYPE trade_side ADD VALUE IF NOT EXISTS 'sell_no'`); err != nil {
 		return fmt.Errorf("add sell_no to trade_side: %w", err)
 	}
+	// Add side column to option_trades if it doesn't exist
+	if _, err := db.Exec(ctx, `ALTER TABLE option_trades ADD COLUMN IF NOT EXISTS side trade_side NOT NULL DEFAULT 'yes'`); err != nil {
+		return fmt.Errorf("add side to option_trades: %w", err)
+	}
 	if _, err := db.Exec(ctx, `DO $$ BEGIN CREATE TYPE forecast_question_status AS ENUM ('open', 'closed', 'resolved', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`); err != nil {
 		return fmt.Errorf("ensure forecast_question_status: %w", err)
 	}

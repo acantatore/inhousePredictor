@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -191,7 +190,7 @@ func TestMultiOptionMarketTradeAndSnapshots(t *testing.T) {
 	require.Len(t, m.Options, 3)
 	tradeSvc := trade.NewService(trade.NewRepository(pool), nil)
 	optionID := m.Options[2].ID
-	tradeResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: m.ID, OptionID: &optionID, Cost: 300})
+	tradeResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: m.ID, OptionID: &optionID, Side: trade.SideYes, Cost: 300})
 	require.NoError(t, err)
 	require.Equal(t, "NA", tradeResult.OptionLabel)
 	refetched, _, err := marketRepo.GetByID(context.Background(), m.ID)
@@ -364,7 +363,7 @@ func TestSellSharesInMultiOptionMarket(t *testing.T) {
 		UserID:   traderID,
 		MarketID: m.ID,
 		OptionID: &latAmOptionID,
-		Side:     trade.Side(strings.ToLower(m.Options[0].Label)),
+		Side:     trade.SideYes,
 		Cost:     300,
 	})
 	require.NoError(t, err)
