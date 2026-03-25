@@ -186,18 +186,21 @@ export function MarketDetailPage() {
             <EmptyState title="No recent activity yet" copy="This market has not seen recent trades. The first new signal can still be useful when the question matters." />
           ) : (
             <div className="stack-sm">
-              {trades.slice(0, 6).map((trade, index) => (
-                <div className="activity-row" key={`${trade.id}-${index}`}>
-                  <span>
-                    {trade.side === 'yes' ? 'YES buy' :
-                     trade.side === 'no' ? 'NO buy' :
-                     trade.side === 'sell_yes' ? 'YES sell' :
-                     trade.side === 'sell_no' ? 'NO sell' : trade.side}
-                  </span>
-                  <strong>{formatPoints(Math.abs(trade.cost))}</strong>
-                  <small>{formatDate(trade.created_at)}</small>
-                </div>
-              ))}
+              {trades.slice(0, 6).map((trade, index) => {
+                console.log('[DEBUG] Rendering trade:', trade.id, 'side:', trade.side, 'cost:', trade.cost);
+                return (
+                  <div className="activity-row" key={`${trade.id}-${index}`}>
+                    <span>
+                      {trade.side === 'yes' ? 'YES buy' :
+                       trade.side === 'no' ? 'NO buy' :
+                       trade.side === 'sell_yes' ? 'YES sell' :
+                       trade.side === 'sell_no' ? 'NO sell' : `unknown(${trade.side})`}
+                    </span>
+                    <strong>{formatPoints(Math.abs(trade.cost))}</strong>
+                    <small>{formatDate(trade.created_at)}</small>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
