@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,4 +275,189 @@ func makeTrade(t *testing.T, pool *pgxpool.Pool, userID, marketID uuid.UUID, sid
 	service := trade.NewService(trade.NewRepository(pool), nil)
 	_, err := service.Execute(context.Background(), trade.TradeRequest{UserID: userID, MarketID: marketID, Side: side, Cost: cost})
 	return err
+}
+
+func TestSellSharesInBinaryMarket(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+	marketID := createMarket(t, pool, creatorID, resolverID, time.Now().Add(1*time.Hour), time.Now().Add(2*time.Hour))
+
+	// Get initial balance
+	var initialBalance int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&initialBalance))
+
+	// Buy YES shares
+	require.NoError(t, makeTrade(t, pool, traderID, marketID, trade.SideYes, 200))
+
+	// Get balance after buy
+	var balanceAfterBuy int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&balanceAfterBuy))
+	require.Less(t, balanceAfterBuy, initialBalance, "Balance should decrease after buying")
+
+	// Get position after buy
+	var yesShares float64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT yes_shares FROM positions WHERE user_id = $1 AND market_id = $2`, traderID, marketID).Scan(&yesShares))
+	require.Greater(t, yesShares, 0.0, "Should have YES shares")
+	sharesBought := yesShares
+
+	// Sell half of the shares
+	service := trade.NewService(trade.NewRepository(pool), nil)
+	sharesToSell := int64(sharesBought / 2)
+	_, err := service.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: marketID, Side: trade.SideSellYes, Cost: sharesToSell})
+	require.NoError(t, err)
+
+	// Get balance after sell
+	var balanceAfterSell int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&balanceAfterSell))
+	require.Greater(t, balanceAfterSell, balanceAfterBuy, "Balance should increase after selling")
+
+	// Get position after sell
+	var yesSharesAfterSell float64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT yes_shares FROM positions WHERE user_id = $1 AND market_id = $2`, traderID, marketID).Scan(&yesSharesAfterSell))
+	require.Less(t, yesSharesAfterSell, sharesBought, "Should have fewer shares after selling")
+	require.InDelta(t, sharesBought-float64(sharesToSell), yesSharesAfterSell, 0.01, "Remaining shares should equal bought minus sold")
+
+	t.Logf("Initial balance: %d, After buy: %d, After sell: %d", initialBalance, balanceAfterBuy, balanceAfterSell)
+	t.Logf("Shares bought: %.2f, Sold: %d, Remaining: %.2f", sharesBought, sharesToSell, yesSharesAfterSell)
+}
+
+func TestSellSharesInMultiOptionMarket(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+
+	marketRepo := market.NewRepository(pool)
+	svc := market.NewService(marketRepo, trade.NewPayoutService(pool))
+	m, err := svc.Create(context.Background(), market.CreateParams{
+		Question:         "Which region wins?",
+		Description:      "Three-way market",
+		Category:         market.CategoryFinancials,
+		Options:          []string{"LatAm", "EMEA", "NA"},
+		CreatorID:        creatorID,
+		ResolverID:       resolverID,
+		InitialLiquidity: 900,
+		ClosesAt:         time.Now().Add(24 * time.Hour),
+		ResolvesAt:       time.Now().Add(48 * time.Hour),
+	})
+	require.NoError(t, err)
+	require.Len(t, m.Options, 3)
+
+	// Get initial balance
+	var initialBalance int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&initialBalance))
+
+	// Buy shares in LatAm option
+	latAmOptionID := m.Options[0].ID
+	tradeSvc := trade.NewService(trade.NewRepository(pool), nil)
+	buyResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{
+		UserID:   traderID,
+		MarketID: m.ID,
+		OptionID: &latAmOptionID,
+		Side:     trade.Side(strings.ToLower(m.Options[0].Label)),
+		Cost:     300,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "LatAm", buyResult.OptionLabel)
+	sharesBought := buyResult.Shares
+
+	// Get balance after buy
+	var balanceAfterBuy int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&balanceAfterBuy))
+	require.Less(t, balanceAfterBuy, initialBalance)
+
+	// Verify position was created
+	var optionShares float64
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT shares FROM option_positions 
+		WHERE user_id = $1 AND market_option_id = $2`, traderID, latAmOptionID).Scan(&optionShares))
+	require.InDelta(t, sharesBought, optionShares, 0.01)
+
+	// Sell half the shares
+	sharesToSell := int64(sharesBought / 2)
+	sellResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{
+		UserID:   traderID,
+		MarketID: m.ID,
+		OptionID: &latAmOptionID,
+		Side:     trade.SideSellYes,
+		Cost:     sharesToSell,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "LatAm", sellResult.OptionLabel)
+	require.Less(t, sellResult.Cost, int64(0), "Sell trade should have negative cost")
+
+	// Get balance after sell
+	var balanceAfterSell int64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&balanceAfterSell))
+	require.Greater(t, balanceAfterSell, balanceAfterBuy, "Balance should increase after selling")
+
+	// Verify position was reduced
+	var optionSharesAfterSell float64
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT shares FROM option_positions 
+		WHERE user_id = $1 AND market_option_id = $2`, traderID, latAmOptionID).Scan(&optionSharesAfterSell))
+	require.InDelta(t, sharesBought-float64(sharesToSell), optionSharesAfterSell, 0.01)
+
+	t.Logf("Initial balance: %d, After buy: %d, After sell: %d", initialBalance, balanceAfterBuy, balanceAfterSell)
+	t.Logf("Shares bought: %.2f, Sold: %d, Remaining: %.2f", sharesBought, sharesToSell, optionSharesAfterSell)
+}
+
+func TestSellFailsWithoutPosition(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+	marketID := createMarket(t, pool, creatorID, resolverID, time.Now().Add(1*time.Hour), time.Now().Add(2*time.Hour))
+
+	service := trade.NewService(trade.NewRepository(pool), nil)
+	_, err := service.Execute(context.Background(), trade.TradeRequest{
+		UserID:   traderID,
+		MarketID: marketID,
+		Side:     trade.SideSellYes,
+		Cost:     100,
+	})
+
+	require.Error(t, err)
+	appErr := &httpx.Error{}
+	require.ErrorAs(t, err, &appErr)
+	require.Equal(t, httpx.CodeInsufficientBalance, appErr.Code)
+}
+
+func TestSellFailsWithInsufficientShares(t *testing.T) {
+	pool, cleanup := testutil.StartPostgres(t)
+	defer cleanup()
+
+	creatorID := createUser(t, pool, "creator@example.com", false)
+	resolverID := createUser(t, pool, "resolver@example.com", false)
+	traderID := createUser(t, pool, "trader@example.com", false)
+	marketID := createMarket(t, pool, creatorID, resolverID, time.Now().Add(1*time.Hour), time.Now().Add(2*time.Hour))
+
+	// Buy some YES shares
+	require.NoError(t, makeTrade(t, pool, traderID, marketID, trade.SideYes, 200))
+
+	// Get actual shares owned
+	var yesShares float64
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT yes_shares FROM positions WHERE user_id = $1 AND market_id = $2`, traderID, marketID).Scan(&yesShares))
+
+	// Try to sell more shares than owned
+	service := trade.NewService(trade.NewRepository(pool), nil)
+	_, err := service.Execute(context.Background(), trade.TradeRequest{
+		UserID:   traderID,
+		MarketID: marketID,
+		Side:     trade.SideSellYes,
+		Cost:     int64(yesShares + 100), // Try to sell more than owned
+	})
+
+	require.Error(t, err)
+	appErr := &httpx.Error{}
+	require.ErrorAs(t, err, &appErr)
+	require.Equal(t, httpx.CodeInsufficientBalance, appErr.Code)
 }
