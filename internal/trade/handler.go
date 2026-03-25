@@ -38,9 +38,14 @@ func (h *Handler) Trade(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeBadRequest, "Bad request.", err))
 		return
 	}
-	if req.OptionID == nil && req.Side != "yes" && req.Side != "no" {
-		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeValidation, "Side must be yes or no.", nil))
-		return
+	// Validate side - for binary markets (no option_id), allow: yes, no, sell_yes, sell_no
+	// For multi-option markets (with option_id), any side is valid
+	if req.OptionID == nil {
+		validSides := map[string]bool{"yes": true, "no": true, "sell_yes": true, "sell_no": true}
+		if !validSides[req.Side] {
+			httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, httpx.CodeValidation, "Side must be yes, no, sell_yes, or sell_no.", nil))
+			return
+		}
 	}
 	var optionID *uuid.UUID
 	if req.OptionID != nil && *req.OptionID != "" {

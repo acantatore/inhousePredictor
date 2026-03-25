@@ -28,6 +28,13 @@ export function TradeTicket({
   const selectedOption = options.find((option) => option.id === selectedOptionId) || options[0];
   const currentProbability = selectedOption ? selectedOption.probability_bps / 10000 : 0;
   const estimatedShares = useMemo(() => estimateShares(cost, currentProbability), [cost, currentProbability]);
+  // For sell mode: estimate proceeds based on current price (approximate, actual may vary due to slippage)
+  const estimatedProceeds = useMemo(() => {
+    if (mode === 'sell' && cost > 0) {
+      return Math.floor(cost * currentProbability);
+    }
+    return 0;
+  }, [mode, cost, currentProbability]);
   const disabledReason = getTradeDisabledReason(market, user.id, user.balance, cost);
 
   // Get user position for this market
@@ -157,10 +164,16 @@ export function TradeTicket({
             </div>
           )}
           {mode === 'sell' && hasPosition && (
-            <div>
-              <span>Your position</span>
-              <strong>{selectedOption?.label === 'YES' ? `${yesShares.toFixed(1)} YES` : `${noShares.toFixed(1)} NO`}</strong>
-            </div>
+            <>
+              <div>
+                <span>Your position</span>
+                <strong>{selectedOption?.label === 'YES' ? `${yesShares.toFixed(1)} YES` : `${noShares.toFixed(1)} NO`}</strong>
+              </div>
+              <div>
+                <span>Est. proceeds</span>
+                <strong>{formatPoints(estimatedProceeds)}</strong>
+              </div>
+            </>
           )}
         </div>
 
