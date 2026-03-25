@@ -279,39 +279,113 @@ func (r *Repository) executeMulti(ctx context.Context, p executeParams) (*execut
 	if probBefore <= 0 {
 		probBefore = 0.05
 	}
-	shares := float64(p.Cost) / probBefore
-	tag, err := tx.Exec(ctx, `UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, p.Cost, p.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("debit user balance: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough points for this trade.", nil)
-	}
+
+	// Check if this is a sell order
+	isSell := p.Side == SideSellYes || p.Side == SideSellNo
+
+	var shares float64
+	var proceeds int64
 	var userBalance int64
+	var tag pgconn.CommandTag
+
+	if isSell {
+		// Handle sell order for multi-option market
+		// Check user's position
+		var userShares float64
+		err = tx.QueryRow(ctx, `
+			SELECT shares FROM option_positions
+			WHERE user_id = $1 AND market_option_id = $2
+		`, p.UserID, *p.OptionID).Scan(&userShares)
+		if err != nil {
+			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have a position in this option.", err)
+		}
+
+		shares = float64(p.Cost) // p.Cost contains shares to sell for sell orders
+		if userShares < shares {
+			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, fmt.Sprintf("You only have %.2f shares to sell.", userShares), nil)
+		}
+
+		// Calculate proceeds: shares * current probability
+		proceeds = int64(shares * probBefore)
+		if proceeds <= 0 {
+			return nil, httpx.NewError(409, httpx.CodeInvalidState, "Cannot sell shares at current market price.", nil)
+		}
+
+		// Credit user balance
+		tag, err = tx.Exec(ctx, `UPDATE users SET balance = balance + $1 WHERE id = $2`, proceeds, p.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("credit user balance: %w", err)
+		}
+
+		// Reduce option collateral
+		collateralReduction := proceeds
+		if _, err := tx.Exec(ctx, `UPDATE market_options SET collateral = collateral - $1 WHERE id = $2`, collateralReduction, selected.id); err != nil {
+			return nil, fmt.Errorf("update option collateral: %w", err)
+		}
+		selected.collateral -= collateralReduction
+		total -= collateralReduction
+
+		// Subtract shares from position
+		if _, err := tx.Exec(ctx, `
+			UPDATE option_positions SET shares = shares - $1
+			WHERE user_id = $2 AND market_option_id = $3
+		`, shares, p.UserID, *p.OptionID); err != nil {
+			return nil, fmt.Errorf("update option position: %w", err)
+		}
+	} else {
+		// Handle buy order (existing logic)
+		shares = float64(p.Cost) / probBefore
+		tag, err = tx.Exec(ctx, `UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1`, p.Cost, p.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("debit user balance: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough points for this trade.", nil)
+		}
+
+		if _, err := tx.Exec(ctx, `UPDATE market_options SET collateral = collateral + $1 WHERE id = $2`, p.Cost, selected.id); err != nil {
+			return nil, fmt.Errorf("update option collateral: %w", err)
+		}
+		selected.collateral += p.Cost
+		total += p.Cost
+
+		// Add shares to position
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO option_positions (user_id, market_option_id, shares)
+			VALUES ($1,$2,$3)
+			ON CONFLICT (user_id, market_option_id)
+			DO UPDATE SET shares = option_positions.shares + EXCLUDED.shares
+		`, p.UserID, *p.OptionID, shares); err != nil {
+			return nil, fmt.Errorf("upsert option position: %w", err)
+		}
+	}
+
+	// Get updated user balance
 	if err := tx.QueryRow(ctx, `SELECT balance FROM users WHERE id = $1`, p.UserID).Scan(&userBalance); err != nil {
 		return nil, fmt.Errorf("load user balance: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE market_options SET collateral = collateral + $1 WHERE id = $2`, p.Cost, selected.id); err != nil {
-		return nil, fmt.Errorf("update option collateral: %w", err)
-	}
-	selected.collateral += p.Cost
-	total += p.Cost
+
 	probAfter := float64(selected.collateral) / float64(total)
-	trade := &Trade{UserID: p.UserID, MarketID: p.MarketID, OptionID: p.OptionID, OptionLabel: selected.label, Shares: shares, Cost: p.Cost, Side: Side(strings.ToLower(selected.label)), UserBalance: userBalance, YesPriceBefore: probBefore, YesPriceAfter: probAfter}
+	if probAfter <= 0 {
+		probAfter = 0.05
+	}
+
+	// Record trade (negative cost for sells to track proceeds)
+	tradeCost := p.Cost
+	if isSell {
+		tradeCost = -proceeds
+	}
+	trade := &Trade{
+		UserID: p.UserID, MarketID: p.MarketID, OptionID: p.OptionID, OptionLabel: selected.label,
+		Shares: shares, Cost: tradeCost, Side: p.Side, UserBalance: userBalance,
+		YesPriceBefore: probBefore, YesPriceAfter: probAfter,
+	}
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO option_trades (user_id, market_id, market_option_id, shares, cost, probability_before, probability_after)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
 		RETURNING id, created_at
 	`, trade.UserID, trade.MarketID, *trade.OptionID, trade.Shares, trade.Cost, probBefore, probAfter).Scan(&trade.ID, &trade.CreatedAt); err != nil {
 		return nil, fmt.Errorf("insert option trade: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO option_positions (user_id, market_option_id, shares)
-		VALUES ($1,$2,$3)
-		ON CONFLICT (user_id, market_option_id)
-		DO UPDATE SET shares = option_positions.shares + EXCLUDED.shares
-	`, p.UserID, *p.OptionID, shares); err != nil {
-		return nil, fmt.Errorf("upsert option position: %w", err)
 	}
 	pointsJSON := "{"
 	for i, opt := range options {
