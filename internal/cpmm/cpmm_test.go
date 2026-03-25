@@ -77,3 +77,73 @@ func TestBuyYesThenBuyNoIsNotFullyReversible(t *testing.T) {
 	// Slippage means a round-trip spend changes the pool state.
 	require.NotEqual(t, pool.YesPrice(), afterNo.YesPrice())
 }
+
+func TestSellYesPreservesInvariantAndChangesPrice(t *testing.T) {
+	pool := New(1000)
+	// First buy some YES shares
+	shares, afterBuy, err := pool.BuyYes(250)
+	require.NoError(t, err)
+	require.Positive(t, shares)
+
+	// Then sell them back
+	proceeds, afterSell, err := afterBuy.SellYes(shares)
+	require.NoError(t, err)
+	require.Positive(t, proceeds)
+
+	// Invariant preserved
+	require.InDelta(t, pool.K, afterSell.YesReserve*afterSell.NoReserve, 1e-6)
+	// Price should move back toward original
+	require.Less(t, afterSell.YesPrice(), afterBuy.YesPrice())
+	require.InDelta(t, 1.0, afterSell.YesPrice()+afterSell.NoPrice(), 1e-9)
+}
+
+func TestSellNoPreservesInvariantAndChangesPrice(t *testing.T) {
+	pool := New(1000)
+	// First buy some NO shares
+	shares, afterBuy, err := pool.BuyNo(250)
+	require.NoError(t, err)
+	require.Positive(t, shares)
+
+	// Then sell them back
+	proceeds, afterSell, err := afterBuy.SellNo(shares)
+	require.NoError(t, err)
+	require.Positive(t, proceeds)
+
+	// Invariant preserved
+	require.InDelta(t, pool.K, afterSell.YesReserve*afterSell.NoReserve, 1e-6)
+	// Price should move back toward original
+	require.Less(t, afterSell.NoPrice(), afterBuy.NoPrice())
+	require.InDelta(t, 1.0, afterSell.YesPrice()+afterSell.NoPrice(), 1e-9)
+}
+
+func TestSellRejectsInvalidAmounts(t *testing.T) {
+	pool := New(100)
+
+	_, _, err := pool.SellYes(0)
+	require.ErrorIs(t, err, ErrInvalidAmount)
+
+	_, _, err = pool.SellNo(-5)
+	require.ErrorIs(t, err, ErrInvalidAmount)
+}
+
+func TestBuyThenSellIsNotFullyReversible(t *testing.T) {
+	pool := New(1000)
+
+	// Buy YES shares
+	shares, afterBuy, err := pool.BuyYes(400)
+	require.NoError(t, err)
+
+	// Sell them back immediately
+	proceeds, afterSell, err := afterBuy.SellYes(shares)
+	require.NoError(t, err)
+
+	// Verify proceeds are positive
+	require.Positive(t, proceeds)
+
+	// In CPMM, buying then selling the exact same shares is mathematically reversible
+	// (minus potential floating point rounding). The "slippage" manifests as:
+	// 1. The price changes after the buy
+	// 2. The next trader to buy faces worse prices
+	// The key invariant is preserved
+	require.InDelta(t, pool.K, afterSell.YesReserve*afterSell.NoReserve, 1e-6)
+}

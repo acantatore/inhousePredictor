@@ -96,3 +96,37 @@ func (p Pool) CostForNoShares(shares float64) (int64, error) {
 	cost := p.K/newNo - p.YesReserve
 	return int64(math.Ceil(cost)), nil
 }
+
+// SellYes computes proceeds and next pool state for selling YES shares back to the pool.
+// User gives shares back to YES reserve, receives collateral from NO reserve.
+func (p Pool) SellYes(shares float64) (proceeds int64, next Pool, err error) {
+	if shares <= 0 {
+		return 0, p, ErrInvalidAmount
+	}
+	// Adding shares back to YES reserve
+	newYes := p.YesReserve + shares
+	newNo := p.K / newYes
+	// Calculate proceeds: what we remove from NO reserve
+	proceedsFloat := p.NoReserve - newNo
+	if proceedsFloat <= 0 {
+		return 0, p, ErrInsufficientLiquidity
+	}
+	return int64(proceedsFloat), Pool{YesReserve: newYes, NoReserve: newNo, K: p.K}, nil
+}
+
+// SellNo computes proceeds and next pool state for selling NO shares back to the pool.
+// User gives shares back to NO reserve, receives collateral from YES reserve.
+func (p Pool) SellNo(shares float64) (proceeds int64, next Pool, err error) {
+	if shares <= 0 {
+		return 0, p, ErrInvalidAmount
+	}
+	// Adding shares back to NO reserve
+	newNo := p.NoReserve + shares
+	newYes := p.K / newNo
+	// Calculate proceeds: what we remove from YES reserve
+	proceedsFloat := p.YesReserve - newYes
+	if proceedsFloat <= 0 {
+		return 0, p, ErrInsufficientLiquidity
+	}
+	return int64(proceedsFloat), Pool{YesReserve: newYes, NoReserve: newNo, K: p.K}, nil
+}

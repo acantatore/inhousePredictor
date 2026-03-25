@@ -9,8 +9,10 @@ import (
 type Side string
 
 const (
-	SideYes Side = "yes"
-	SideNo  Side = "no"
+	SideYes     Side = "yes"
+	SideNo      Side = "no"
+	SideSellYes Side = "sell_yes"
+	SideSellNo  Side = "sell_no"
 )
 
 type Trade struct {

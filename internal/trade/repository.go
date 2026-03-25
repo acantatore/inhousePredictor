@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/naranjax/inhousepredictor/internal/cpmm"
 	"github.com/naranjax/inhousepredictor/internal/httpx"
@@ -84,48 +85,94 @@ func (r *Repository) execute(ctx context.Context, p executeParams) (*executeResu
 
 	var shares float64
 	var newPool cpmm.Pool
+	var proceeds int64
+	var isSell bool
+
+	// Handle buy orders
 	if p.Side == SideYes {
 		shares, newPool, err = pool.BuyYes(p.Cost)
-	} else {
+	} else if p.Side == SideNo {
 		shares, newPool, err = pool.BuyNo(p.Cost)
+	} else if p.Side == SideSellYes || p.Side == SideSellNo {
+		// Handle sell orders
+		isSell = true
+		var yesShares, noShares float64
+		err = tx.QueryRow(ctx, `
+			SELECT yes_shares, no_shares FROM positions
+			WHERE user_id = $1 AND market_id = $2
+		`, p.UserID, p.MarketID).Scan(&yesShares, &noShares)
+		if err != nil {
+			return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have a position in this market.", err)
+		}
+
+		if p.Side == SideSellYes {
+			if yesShares < float64(p.Cost) {
+				return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough YES shares to sell.", nil)
+			}
+			shares = float64(p.Cost)
+			proceeds, newPool, err = pool.SellYes(shares)
+		} else {
+			if noShares < float64(p.Cost) {
+				return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough NO shares to sell.", nil)
+			}
+			shares = float64(p.Cost)
+			proceeds, newPool, err = pool.SellNo(shares)
+		}
 	}
+
 	if err != nil {
 		return nil, httpx.NewError(400, httpx.CodeValidation, err.Error(), err)
 	}
 
 	priceAfter := newPool.YesPrice()
 
-	// Debit user balance atomically
+	// Update user balance (debit for buys, credit for sells)
 	var userBalance int64
-	tag, err := tx.Exec(ctx, `
-		UPDATE users SET balance = balance - $1
-		WHERE id = $2 AND balance >= $1
-	`, p.Cost, p.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("debit user: %w", err)
+	var tag pgconn.CommandTag
+	if isSell {
+		tag, err = tx.Exec(ctx, `
+			UPDATE users SET balance = balance + $1
+			WHERE id = $2
+		`, proceeds, p.UserID)
+	} else {
+		tag, err = tx.Exec(ctx, `
+			UPDATE users SET balance = balance - $1
+			WHERE id = $2 AND balance >= $1
+		`, p.Cost, p.UserID)
 	}
-	if tag.RowsAffected() == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("update user balance: %w", err)
+	}
+	if tag.RowsAffected() == 0 && !isSell {
 		return nil, httpx.NewError(409, httpx.CodeInsufficientBalance, "You do not have enough points for this trade.", nil)
 	}
 	if err := tx.QueryRow(ctx, `SELECT balance FROM users WHERE id = $1`, p.UserID).Scan(&userBalance); err != nil {
 		return nil, fmt.Errorf("get user balance: %w", err)
 	}
 
-	// Update pool state
+	// Update pool state (add collateral for buys, subtract for sells)
+	collateralDelta := p.Cost
+	if isSell {
+		collateralDelta = -proceeds
+	}
 	_, err = tx.Exec(ctx, `
 		UPDATE pools
 		SET yes_reserve = $1, no_reserve = $2,
 		    total_collateral = total_collateral + $3, updated_at = NOW()
 		WHERE market_id = $4
-	`, newPool.YesReserve, newPool.NoReserve, p.Cost, p.MarketID)
+	`, newPool.YesReserve, newPool.NoReserve, collateralDelta, p.MarketID)
 	if err != nil {
 		return nil, fmt.Errorf("update pool: %w", err)
 	}
 
-	// Record immutable trade
+	// Record immutable trade (negative cost for sells to track proceeds)
+	tradeCost := p.Cost
+	if isSell {
+		tradeCost = -proceeds
+	}
 	t := &Trade{
 		UserID: p.UserID, MarketID: p.MarketID,
-		Side: p.Side, Shares: shares, Cost: p.Cost,
+		Side: p.Side, Shares: shares, Cost: tradeCost,
 		UserBalance:    userBalance,
 		YesPriceBefore: priceBefore, YesPriceAfter: priceAfter,
 	}
@@ -141,21 +188,25 @@ func (r *Repository) execute(ctx context.Context, p executeParams) (*executeResu
 		return nil, fmt.Errorf("insert trade: %w", err)
 	}
 
-	// Upsert position
-	if p.Side == SideYes {
+	// Upsert position (add shares for buys, subtract for sells)
+	shareDelta := shares
+	if isSell {
+		shareDelta = -shares
+	}
+	if p.Side == SideYes || p.Side == SideSellYes {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO positions (user_id, market_id, yes_shares, no_shares)
 			VALUES ($1,$2,$3,0)
 			ON CONFLICT (user_id, market_id)
 			DO UPDATE SET yes_shares = positions.yes_shares + $3
-		`, p.UserID, p.MarketID, shares)
+		`, p.UserID, p.MarketID, shareDelta)
 	} else {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO positions (user_id, market_id, yes_shares, no_shares)
 			VALUES ($1,$2,0,$3)
 			ON CONFLICT (user_id, market_id)
 			DO UPDATE SET no_shares = positions.no_shares + $3
-		`, p.UserID, p.MarketID, shares)
+		`, p.UserID, p.MarketID, shareDelta)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("upsert position: %w", err)
