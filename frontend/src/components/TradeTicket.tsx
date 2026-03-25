@@ -39,11 +39,19 @@ export function TradeTicket({
 
   // Get user position for this market
   const position = useMemo(() => getPositionForMarket(positions, market.id), [positions, market.id]);
+  // For binary markets: use yes_shares/no_shares
+  // For multi-option markets: use holdings array
   const yesShares = position?.yes_shares || 0;
   const noShares = position?.no_shares || 0;
+  // Get shares for selected option from holdings (for multi-option markets)
+  const selectedOptionShares = useMemo(() => {
+    if (!position?.holdings || !selectedOption) return 0;
+    const holding = position.holdings.find(h => h.option_id === selectedOption.id);
+    return holding?.shares || 0;
+  }, [position, selectedOption]);
   const hasYesPosition = yesShares > 0;
   const hasNoPosition = noShares > 0;
-  const hasPosition = hasYesPosition || hasNoPosition;
+  const hasPosition = hasYesPosition || hasNoPosition || (position?.holdings && position.holdings.length > 0);
 
   async function submitTrade(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,12 +65,12 @@ export function TradeTicket({
 
     // Validate sell orders
     if (mode === 'sell') {
-      if (selectedOption?.label === 'YES' && yesShares < cost) {
-        setError(`You only have ${yesShares.toFixed(2)} YES shares to sell.`);
-        return;
-      }
-      if (selectedOption?.label === 'NO' && noShares < cost) {
-        setError(`You only have ${noShares.toFixed(2)} NO shares to sell.`);
+      // For multi-option markets, check holdings; for binary, check yes_shares/no_shares
+      const availableShares = market.options && market.options.length > 2 
+        ? selectedOptionShares 
+        : (selectedOption?.label === 'YES' ? yesShares : noShares);
+      if (availableShares < cost) {
+        setError(`You only have ${availableShares.toFixed(2)} shares in ${selectedOption?.label || 'this option'} to sell.`);
         return;
       }
     }
@@ -120,7 +128,11 @@ export function TradeTicket({
 
       <div className="stack-sm" role="tablist" aria-label="Trade option">
         {options.map((option) => {
-          const isSellable = mode === 'sell' && ((option.label === 'YES' && hasYesPosition) || (option.label === 'NO' && hasNoPosition));
+          // Get shares for this option
+          const optionShares = position?.holdings?.find(h => h.option_id === option.id)?.shares 
+            || (option.label === 'YES' ? yesShares : option.label === 'NO' ? noShares : 0);
+          const hasShares = optionShares > 0;
+          const isSellable = mode === 'sell' && hasShares;
           const isDisabled = mode === 'buy' ? Boolean(disabledReason) : !isSellable;
           return (
             <button
@@ -131,8 +143,7 @@ export function TradeTicket({
               disabled={isDisabled}
             >
               {option.label} · {formatBpsPercent(option.probability_bps)}
-              {mode === 'sell' && option.label === 'YES' && hasYesPosition && ` · ${yesShares.toFixed(1)} shares`}
-              {mode === 'sell' && option.label === 'NO' && hasNoPosition && ` · ${noShares.toFixed(1)} shares`}
+              {mode === 'sell' && hasShares && ` · ${optionShares.toFixed(1)} shares`}
             </button>
           );
         })}
@@ -168,7 +179,13 @@ export function TradeTicket({
             <>
               <div>
                 <span>Your position</span>
-                <strong>{selectedOption?.label === 'YES' ? `${yesShares.toFixed(1)} YES` : `${noShares.toFixed(1)} NO`}</strong>
+                <strong>
+                  {market.options && market.options.length > 2
+                    ? `${selectedOptionShares.toFixed(1)} ${selectedOption?.label || ''}`
+                    : selectedOption?.label === 'YES'
+                      ? `${yesShares.toFixed(1)} YES`
+                      : `${noShares.toFixed(1)} NO`}
+                </strong>
               </div>
               <div>
                 <span>Est. proceeds</span>
@@ -181,7 +198,9 @@ export function TradeTicket({
         <p className="helper-copy">
           {mode === 'buy'
             ? `Trading closes at ${new Date(market.closes_at).toLocaleString()}. Creators cannot trade their own markets.`
-            : `Sell shares back to the pool. Proceeds depend on current market price. You have ${yesShares.toFixed(1)} YES and ${noShares.toFixed(1)} NO shares.`}
+            : market.options && market.options.length > 2
+              ? `Sell shares back to the pool. You have ${selectedOptionShares.toFixed(1)} shares in ${selectedOption?.label || 'this option'}.`
+              : `Sell shares back to the pool. You have ${yesShares.toFixed(1)} YES and ${noShares.toFixed(1)} NO shares.`}
         </p>
 
         {disabledReason && mode === 'buy' ? <InlineNotice tone="warning">{disabledReason}</InlineNotice> : null}
