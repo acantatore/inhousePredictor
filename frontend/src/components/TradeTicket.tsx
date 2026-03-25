@@ -72,6 +72,7 @@ export function TradeTicket({
       const side: TradeSide = mode === 'buy'
         ? selectedOption?.label.toLowerCase() as TradeSide
         : (`sell_${selectedOption?.label.toLowerCase()}` as TradeSide);
+      console.log('[DEBUG] Sending trade:', { mode, side, cost, option_id: selectedOption?.id });
       await api.trade(token, market.id, { side, option_id: selectedOption?.id, cost });
       setMessage(mode === 'buy' ? 'Trade placed. Your balance and market signal are refreshing now.' : 'Shares sold. Your balance has been updated.');
       setCost(200);
