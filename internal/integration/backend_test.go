@@ -290,7 +290,8 @@ func TestSellSharesInBinaryMarket(t *testing.T) {
 	var initialBalance int64
 	require.NoError(t, pool.QueryRow(context.Background(), `SELECT balance FROM users WHERE id = $1`, traderID).Scan(&initialBalance))
 
-	// Buy YES shares
+	// Buy YES shares with 200 points
+	// Due to CPMM pricing, buying pushes the YES price up, so we get fewer shares than 200
 	require.NoError(t, makeTrade(t, pool, traderID, marketID, trade.SideYes, 200))
 
 	// Get balance after buy
@@ -305,6 +306,8 @@ func TestSellSharesInBinaryMarket(t *testing.T) {
 	sharesBought := yesShares
 
 	// Sell half of the shares
+	// Due to CPMM slippage, selling gives back less than half the original cost
+	// This is expected behavior - the market maker extracts value from price movement
 	service := trade.NewService(trade.NewRepository(pool), nil)
 	sharesToSell := int64(sharesBought / 2)
 	_, err := service.Execute(context.Background(), trade.TradeRequest{UserID: traderID, MarketID: marketID, Side: trade.SideSellYes, Cost: sharesToSell})
@@ -323,6 +326,7 @@ func TestSellSharesInBinaryMarket(t *testing.T) {
 
 	t.Logf("Initial balance: %d, After buy: %d, After sell: %d", initialBalance, balanceAfterBuy, balanceAfterSell)
 	t.Logf("Shares bought: %.2f, Sold: %d, Remaining: %.2f", sharesBought, sharesToSell, yesSharesAfterSell)
+	t.Logf("Points spent: 200, Points received from sell: %d", balanceAfterSell-balanceAfterBuy)
 }
 
 func TestSellSharesInMultiOptionMarket(t *testing.T) {
@@ -379,7 +383,9 @@ func TestSellSharesInMultiOptionMarket(t *testing.T) {
 		WHERE user_id = $1 AND market_option_id = $2`, traderID, latAmOptionID).Scan(&optionShares))
 	require.InDelta(t, sharesBought, optionShares, 0.01)
 
-	// Sell half the shares
+	// Sell half the shares back
+	// For multi-option markets, SideSellYes/SideSellNo are used for any option sell
+	// The option_id determines which option is being sold
 	sharesToSell := int64(sharesBought / 2)
 	sellResult, err := tradeSvc.Execute(context.Background(), trade.TradeRequest{
 		UserID:   traderID,
@@ -390,7 +396,7 @@ func TestSellSharesInMultiOptionMarket(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "LatAm", sellResult.OptionLabel)
-	require.Less(t, sellResult.Cost, int64(0), "Sell trade should have negative cost")
+	require.Less(t, sellResult.Cost, int64(0), "Sell trade should have negative cost (proceeds credited separately)")
 
 	// Get balance after sell
 	var balanceAfterSell int64
