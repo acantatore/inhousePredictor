@@ -161,8 +161,8 @@ export function TradeTicket({
           hint={mode === 'buy' ? `Current balance ${formatPoints(user.balance)}` : undefined}
         >
           <TextInput
-            min={mode === 'buy' ? 50 : 0.01}
-            step={mode === 'buy' ? 50 : 0.01}
+            min={mode === 'buy' ? 50 : 1}
+            step={mode === 'buy' ? 50 : 1}
             type="number"
             value={cost}
             disabled={mode === 'buy' ? Boolean(disabledReason) : !canSellSelected}
