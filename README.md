@@ -18,7 +18,7 @@ Employees create binary markets, spend internal points on `YES` or `NO`, watch p
 - email/password auth with JWT + auth cookie support
 - market browsing with filters and live price updates
 - market detail with trade ticket, evidence, and dispute state
-- buy-only YES / NO trading powered by a constant-product market maker
+- YES / NO trading with buy and sell support powered by a constant-product market maker
 - portfolio view with forecast accuracy and points earned / lost
 - create market flow with resolver and timing rules
 - resolver flow for recording outcomes with evidence
@@ -186,7 +186,7 @@ npm run dev -- --host 0.0.0.0
 - resolvers must attach evidence when resolving a market
 - disputes are time-bounded
 - the platform is play-money only
-- v1 trading is buy-only; there is no sell flow yet
+- users can buy and sell positions before market resolution
 
 ## Additional Docs
 

@@ -334,7 +334,7 @@ Review a disputed market.
 
 ### `POST /markets/{id}/trade`
 
-Buy YES or NO with points.
+Buy or sell YES/NO shares with points.
 
 #### Request
 
@@ -345,10 +345,16 @@ Buy YES or NO with points.
 }
 ```
 
+**Side values:**
+- `"yes"` — Buy YES shares
+- `"no"` — Buy NO shares  
+- `"sell_yes"` — Sell YES shares (must have position)
+- `"sell_no"` — Sell NO shares (must have position)
+
 #### Expected Behavior
 
 - checks market is open and before `closes_at`
-- checks user has sufficient balance
+- checks user has sufficient balance (for buys) or sufficient shares (for sells)
 - rejects creator self-trading
 - executes trade atomically
 - updates position and pool state
