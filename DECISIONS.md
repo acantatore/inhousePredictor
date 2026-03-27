@@ -1,6 +1,6 @@
 # InhousePredictor Decisions
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -114,16 +114,16 @@ Each decision includes:
   - User management and broad moderation tooling are out of scope for now.
   - Admin API and UI work should focus on dispute handling only.
 
-### D-009 - Buy-first trading model in v1
+### D-009 - Buy-first copy with sell support in v1
 
 - Status: `active`
 - Date: 2026-03-20
-- Context: The current backend supports buying YES/NO positions only. The design system is already written to avoid implying liquid mark-to-market trading.
-- Decision: v1 trading is spend-first and buy-only.
+- Context: The product now supports both buying and selling positions, but the interface still needs to feel like a calm internal forecasting tool rather than a trading terminal.
+- Decision: v1 trading keeps spend-first buy language while also supporting sell flows using shares-to-sell language.
 - Consequences:
-  - UI copy should use `Points to spend` and `Estimated shares`.
-  - Portfolio UX must not imply users can exit positions before resolution.
-  - Sell or exit functionality remains a later enhancement.
+  - UI copy should use `Points to spend` and `Estimated shares` for buys.
+  - Sell flows should use `Shares to sell` and clear proceeds guidance.
+  - Portfolio UX must still avoid trader-style live PnL framing.
 
 ### D-010 - Use CPMM for pricing
 
@@ -191,15 +191,15 @@ Each decision includes:
 
 ## Deferred Decisions
 
-### D-016 - Sell and exit mechanics
+### D-016 - Fractional-share sell mechanics
 
 - Status: `deferred`
 - Date: 2026-03-20
-- Context: Sell functionality is on the roadmap, but the current product and design docs are intentionally written around buy-only trading.
-- Decision: Sell and exit mechanics are deferred until after the first launch-ready version.
+- Context: Sell functionality now exists, but the current API contract still reuses integer `cost` for sell orders, which limits sells to whole-share amounts.
+- Decision: Fractional-share sell support is deferred until the API contract changes.
 - Consequences:
-  - Current user flows and QA criteria should assume positions resolve, not unwind.
-  - Later work must revisit portfolio language, trading flows, and ledger semantics.
+  - Current UI and docs should describe sell inputs as whole-share amounts.
+  - Later work must revisit handler, service, and contract semantics before fractional sells ship.
 
 ### D-017 - Full admin suite
 

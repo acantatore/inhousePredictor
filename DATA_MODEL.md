@@ -1,6 +1,6 @@
 # InhousePredictor Data Model
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -99,7 +99,7 @@ Rules:
 
 ### Trade
 
-Represents one executed buy event.
+Represents one executed trade event.
 
 Key fields:
 
@@ -116,7 +116,8 @@ Key fields:
 Rules:
 
 - trade ledger is immutable
-- trade `cost` is integer points spent
+- buy-side trade `cost` is integer points spent
+- sell-side trade `cost` is the whole-number share amount requested under the current API contract
 - `shares` can be fractional
 - trades should only occur while market trading is open
 
@@ -134,7 +135,7 @@ Rules:
 
 - at most one position row exists per user-market pair
 - positions are derived and updated from the trade ledger
-- current v1 model is buy-only, so shares only increase before resolution
+- buy trades increase holdings and sell trades decrease holdings before resolution
 
 ### Dispute
 
@@ -179,6 +180,8 @@ Rules:
 
 - `yes`
 - `no`
+- `sell_yes`
+- `sell_no`
 - `cancelled`
 
 ### Trade Side
@@ -282,9 +285,9 @@ Payout processing must be idempotent.
 
 ---
 
-## Planned Schema Changes
+## Recent Schema Changes
 
-### Add `markets.payout_at`
+### `markets.payout_at`
 
 Purpose:
 
@@ -311,6 +314,6 @@ Purpose:
 
 ## Notes For Future Expansion
 
-- sell and exit mechanics will require additional trade semantics and position updates
+- fractional-share sell support would require revisiting the current integer `cost` contract for sell orders
 - audit-oriented admin workflows may require more event history or actor metadata
 - pagination may introduce cursor fields or stable sort contracts on list endpoints

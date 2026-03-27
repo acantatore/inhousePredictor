@@ -1,6 +1,6 @@
 # InhousePredictor — Architecture & State of the Project
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -67,7 +67,7 @@ inhousePredictor/
 │       └── hub.go               # Pub/sub broadcaster for price updates
 ├── migrations/
 │   └── 001_init.sql             # Full PostgreSQL schema
-├── frontend/                    # Empty — not yet built
+├── frontend/                    # React + Vite frontend application
 ├── docker-compose.yml
 ├── Dockerfile                   # Multi-stage build
 ├── .env.example
@@ -122,9 +122,9 @@ inhousePredictor/
 |---|---|---|
 | id | UUID PK | |
 | user_id, market_id | UUID FK | |
-| side | ENUM | `yes \| no` |
-| shares | DOUBLE PRECISION | Shares received |
-| cost | BIGINT | Points spent |
+| side | ENUM | `yes \| no \| sell_yes \| sell_no` |
+| shares | DOUBLE PRECISION | Shares bought or sold |
+| cost | BIGINT | Buy points spent or whole shares requested for sell orders |
 | yes_price_before | DOUBLE PRECISION | Implied prob before trade |
 | yes_price_after | DOUBLE PRECISION | Implied prob after trade |
 | created_at | TIMESTAMPTZ | |
@@ -167,7 +167,7 @@ POST /markets/{id}/resolve         body: {outcome: "yes"|"no", evidence_url}  �
 POST /markets/{id}/dispute         body: {reason}
 POST /markets/{id}/review-dispute  body: {action, outcome?, evidence_url?}       — admin only
 
-POST /markets/{id}/trade           body: {side: "yes"|"no", cost: <int64 points>}
+POST /markets/{id}/trade           body: {side: "yes"|"no"|"sell_yes"|"sell_no", cost: <int64>}  # buy points or whole shares to sell
 GET  /markets/{id}/trades          Returns last 50 trades
 GET  /positions                    User's holdings across all markets
 ```
@@ -304,9 +304,6 @@ First admin bootstrap is supported with `BOOTSTRAP_ADMIN_EMAIL`.
 
 ## What Doesn't Exist Yet
 
-- **Frontend** — `frontend/` is an empty directory
-- **Admin panel** — No frontend surface for dispute resolution or user management
+- **Admin panel** — No broader management surface beyond the dispute workflow
 - **Rate limiting** — No request throttling
 - **CI/CD** — No pipeline or linting config
-
-- **Frontend** — Still not built

@@ -1,6 +1,6 @@
 # InhousePredictor Product Requirements Document
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -116,7 +116,7 @@ Responsibilities and needs:
 - markets home
 - filters by category and status
 - market detail
-- binary YES/NO trading with play-money points
+- binary YES/NO trading with buy and sell support using play-money points
 - real-time price updates through WebSocket
 - user portfolio and position history
 - create market flow
@@ -142,7 +142,6 @@ Responsibilities and needs:
 
 - public marketing site
 - full admin management console
-- sell or exit positions
 - advanced charts
 - tournaments or seasonal resets
 - calibration leaderboards
@@ -183,6 +182,7 @@ Responsibilities and needs:
 ### Trading
 
 - Users can buy YES or NO by entering points to spend.
+- Users can sell existing YES or NO positions by entering whole shares to sell.
 - Trading must stop after `closes_at`.
 - Users cannot trade their own markets.
 - Users cannot trade without sufficient balance.
@@ -198,7 +198,7 @@ Responsibilities and needs:
 
 - Users can review current positions and resolved outcomes.
 - Portfolio should show committed points and resolved results.
-- Portfolio should not imply liquid mark-to-market PnL before sell functionality exists.
+- Portfolio should show positions and results clearly without drifting into trader-style live PnL framing.
 
 ### Real-Time Updates
 
@@ -285,5 +285,5 @@ The product is ready for first internal users only when all of the following are
 
 - what exact dispute outcomes can admins apply after review?
 - what final JSON error envelope should all handlers use?
-- when should sell or exit mechanics be introduced after v1?
+- should sell orders stay whole-share only, or should the API contract evolve to support fractional sells?
 - what pagination contract should the market list use before broader rollout?

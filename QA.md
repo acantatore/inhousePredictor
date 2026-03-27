@@ -1,6 +1,6 @@
 # InhousePredictor QA Plan
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -91,6 +91,7 @@ Required coverage once UI exists:
 - browse markets
 - open market detail
 - buy YES or NO
+- sell an existing position
 - create market
 - resolve market as resolver
 - submit dispute
@@ -157,6 +158,7 @@ These are mandatory pass scenarios before first internal users.
 ### Trading
 
 - user can buy YES or NO with valid cost input
+- user can sell an existing YES or NO position with a whole-share sell input
 - estimated shares align with executed shares within expected contract behavior
 - user balance updates correctly
 - WS price update is emitted after successful trade
@@ -176,7 +178,7 @@ These are mandatory pass scenarios before first internal users.
 ### Portfolio
 
 - user sees current holdings and resolved outcomes
-- portfolio does not present sell-based concepts that do not exist in v1
+- portfolio and trade surfaces explain sell support without drifting into trader-style live PnL language
 
 ---
 
