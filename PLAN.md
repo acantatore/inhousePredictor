@@ -1,6 +1,6 @@
 # InhousePredictor Implementation Plan
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -8,7 +8,7 @@
 
 Ship a launch-ready internal prediction market product that is safe, trustworthy, and usable by normal employees.
 
-This plan assumes the current backend exists, the frontend does not yet exist, and several backend issues identified in `ARCHITECTURE.md` and `TODOS.md` must be fixed before first users.
+This plan assumes the current backend and frontend foundations exist, and several launch-readiness issues identified in `ARCHITECTURE.md` and `TODOS.md` must still be verified or hardened before first users.
 
 ---
 
@@ -26,9 +26,9 @@ This plan assumes the current backend exists, the frontend does not yet exist, a
 
 - backend API exists for auth, markets, trading, positions, resolution, and disputes
 - WebSocket price updates exist
-- frontend directory exists but has no implementation
-- several must-fix backend issues remain unresolved
-- no unit tests or integration tests exist yet
+- frontend foundation exists with core market, trading, and portfolio flows
+- several release-hardening and polish items remain unresolved
+- unit and integration tests exist for critical backend flows
 - no CI/CD pipeline exists yet
 
 ---
@@ -110,7 +110,7 @@ Execution implications:
 
 - summary stats lead the page
 - unresolved holdings are prioritized above historical detail
-- copy and visuals must avoid implying sell-based or live-liquid trading mechanics that do not exist in v1
+- copy and visuals should acknowledge sell support without drifting into trader-style live-PnL framing
 
 ---
 
@@ -486,7 +486,7 @@ Admin dispute handling, security hardening, QA, and operations checks are comple
 
 ## Nice-To-Have Work After Launch Readiness
 
-- sell or exit flow
+- fractional-share sell support
 - calibration scores
 - seasonal tournaments
 - market archival

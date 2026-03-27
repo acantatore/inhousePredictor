@@ -186,17 +186,30 @@ npm run dev -- --host 0.0.0.0
 - resolvers must attach evidence when resolving a market
 - disputes are time-bounded
 - the platform is play-money only
-- users can buy and sell positions before market resolution
+- users can buy and sell positions before market resolution; sell orders currently use whole-share amounts
 
 ## Additional Docs
 
 - `ARCHITECTURE.md` - backend structure and system mechanics
 - `API.md` - request/response contract
+- `CHANGELOG.md` - release-facing change history
+- `CONTRIBUTING.md` - local setup and contribution workflow
+- `VERSION` - current project version label
+- `DATA_MODEL.md` - domain entities, invariants, and schema notes
+- `DESIGN.md` - product design system and screen blueprints
+- `USER_FLOWS.md` - core user journeys and UX expectations
+- `TESTING.md` - backend testing philosophy and conventions
+- `DECISIONS.md` - active product and technical decisions
+- `COPY_GUIDE.md` - product voice and microcopy rules
 - `PRD.md` - product goals and scope
 - `PLAN.md` - phased implementation plan
 - `QA.md` - release and verification guidance
 - `SECURITY.md` - auth, trust boundaries, and abuse cases
 - `OPERATIONS.md` - runtime and deployment guidance
+- `TODOS.md` - prioritized implementation checklist
+- `TODOS_SEC.md` - security-focused follow-up checklist
+- `deep-research-report.md` - background research and market context
+- `docs/` - supplemental roadmap and design notes
 
 ## Current Status
 

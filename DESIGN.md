@@ -1,6 +1,6 @@
 # InhousePredictor Design System
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -253,9 +253,10 @@ The trade panel should remain visible on desktop as the user scrolls.
 
 It includes:
 
+- buy / sell mode toggle when the user has a position
 - YES / NO selection
-- points-to-spend input
-- estimated shares preview
+- points-to-spend or shares-to-sell input
+- estimated shares preview for buys and estimated proceeds preview for sells
 - current balance
 - close-time reminder
 - clear success/error feedback
@@ -296,7 +297,7 @@ Supporting sections:
 - `Open Positions`
 - `Resolved Outcomes`
 
-Do not imply liquid mark-to-market PnL when the user cannot sell yet.
+Do not imply trader-style liquid mark-to-market PnL just because the product now supports selling.
 
 ### 4. Create Market
 
@@ -384,7 +385,7 @@ New UI should reuse this vocabulary instead of inventing ad hoc patterns.
 ## Interaction Rules
 
 - Use plain-language trading copy.
-- Primary trade model is spend-first.
+- Buy flows stay spend-first; sell flows use shares-to-sell language.
 - Show estimated shares before confirmation.
 - Keep timing context near the primary CTA.
 - Replace disabled action states with explanations.
@@ -397,7 +398,10 @@ Preferred:
 
 - `Buy YES`
 - `Buy NO`
+- `Sell YES`
+- `Sell NO`
 - `Points to spend`
+- `Shares to sell`
 - `Estimated shares`
 - `Awaiting resolution`
 

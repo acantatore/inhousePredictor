@@ -1,6 +1,6 @@
 # InhousePredictor Operations Guide
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -14,10 +14,10 @@ The project is still early, so this guide covers both the current local-developm
 
 ## Runtime Overview
 
-- API server written in Go 1.22
+- API server written in Go 1.24
 - PostgreSQL 16 as primary datastore
 - WebSocket support for live updates
-- Docker and docker-compose for local startup
+- Docker and Docker Compose for local startup
 
 ---
 
@@ -28,18 +28,24 @@ The project is still early, so this guide covers both the current local-developm
 ```bash
 cp .env.example .env
 # edit .env and set JWT_SECRET
-docker-compose up
+docker compose up --build -d
+
+# in a second terminal
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0
 ```
 
 Expected local endpoints:
 
 - API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
+- Frontend: `http://localhost:5173`
 
 ### Notes
 
-- current schema application relies on container startup behavior
-- frontend runtime does not exist yet
+- schema is reconciled on application startup
+- frontend runtime is available through the Vite dev server in `frontend/`
 
 ---
 
@@ -61,13 +67,15 @@ Expected local endpoints:
 
 ### Current State
 
-- database schema is applied automatically only under the current container setup assumptions
+- application runs migrations on startup before serving traffic
+- startup fails clearly if migrations cannot be applied
+- startup can bootstrap the first admin when configured
 
 ### Target State
 
 - application runs migrations on startup before serving traffic
 - startup fails clearly if migrations cannot be applied
-- startup optionally bootstraps the first admin when configured
+- startup behavior stays consistent outside the current Docker-based local flow
 
 ---
 
@@ -76,13 +84,13 @@ Expected local endpoints:
 ### Current State
 
 - schema lives in `migrations/001_init.sql`
-- there is no general migration runner in the application
+- `internal/migrate` runs schema reconciliation during normal startup
 
-### Required Improvements
+### Ongoing Improvements
 
-- embed migration execution into normal startup
-- add future migrations for payout idempotency and pool cleanup
-- avoid environment setups that require a fresh container to apply schema changes
+- add future migrations through the same startup runner as schema evolves
+- document migration rollback expectations for production deploys
+- verify non-container deploys behave the same as local Docker startup
 
 ---
 
@@ -90,11 +98,12 @@ Expected local endpoints:
 
 ### Current State
 
-- first admin must be created by direct database update
+- if `BOOTSTRAP_ADMIN_EMAIL` is set and no admin exists, startup promotes that user automatically
 
 ### Target State
 
 - if `BOOTSTRAP_ADMIN_EMAIL` is set and no admin exists, promote that user on startup
+- promotion behavior is documented for both local and production environments
 
 ### Operational Reason
 
@@ -106,7 +115,8 @@ Expected local endpoints:
 
 ### Current State
 
-- structured logging is not yet implemented
+- structured JSON logging uses `slog`
+- request logging runs through the shared HTTP middleware
 
 ### Target State
 
@@ -133,7 +143,8 @@ Expected local endpoints:
 
 ### Current State
 
-- graceful shutdown is missing
+- graceful shutdown handles `SIGINT` and `SIGTERM`
+- the HTTP server drains requests before exit and the WebSocket hub is shut down explicitly
 
 ### Target State
 
@@ -195,17 +206,15 @@ Before first users, monitor at least:
 ## Deployment Notes
 
 - CI/CD does not exist yet
-- backend deployment is the only runtime concern today
-- frontend deployment can be documented after frontend implementation exists
+- backend deployment remains the primary runtime concern today
+- frontend build output exists, but production frontend deployment is still undocumented
 
 ---
 
 ## Operational Risks
 
-- migration behavior is too fragile in current form
-- manual admin bootstrap is easy to forget and error-prone
-- lack of structured logs makes incident analysis difficult
-- missing graceful shutdown can create noisy deploy behavior
+- backup and restore remain undocumented
+- frontend deployment expectations are still undocumented
 - lack of documented backup or rollback increases recovery risk
 
 ---

@@ -1,6 +1,6 @@
 # InhousePredictor API Contract
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -60,6 +60,8 @@ Authorization: Bearer <jwt>
 ### Money-Like Values
 
 - user balances, trade cost, and initial liquidity are integer point values
+- buy-side trade `cost` is integer points to spend
+- sell-side trade `cost` is the whole-number share amount to sell under the current API contract
 - points are internal only and not redeemable for cash
 
 ---
@@ -344,6 +346,10 @@ Buy or sell YES/NO shares with points.
   "cost": 1000
 }
 ```
+
+**Request semantics:**
+- buy orders use `cost` as integer points to spend
+- sell orders use `cost` as the whole-number share amount to sell
 
 **Side values:**
 - `"yes"` — Buy YES shares

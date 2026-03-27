@@ -1,6 +1,6 @@
 # InhousePredictor User Flows
 
-> Last updated: 2026-03-20
+> Last updated: 2026-03-27
 
 ---
 
@@ -217,7 +217,7 @@ Understand positions, committed points, and resolved outcomes.
 
 ### UX Requirements
 
-- avoid implying liquid PnL when sell does not exist
+- avoid brokerage-style live PnL framing even though users can now sell positions
 - emphasize learning and resolution status over trader-style analytics
 
 ---
