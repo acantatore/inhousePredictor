@@ -142,8 +142,8 @@ export function MarketsPage() {
     <div className="stack-lg">
       <Card className="controls-card">
         <div className="controls-grid">
-          <label>
-            Category
+          <label className="field control-field">
+            <span className="field-label">Category</span>
             <select className="input" value={category} onChange={(event) => setCategory(event.target.value)}>
               <option value="">All categories</option>
               {categories.map((item) => (
@@ -153,8 +153,8 @@ export function MarketsPage() {
               ))}
             </select>
           </label>
-          <label>
-            Status
+          <label className="field control-field">
+            <span className="field-label">Status</span>
             <select className="input" value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="">All statuses</option>
               <option value="open">Open</option>
@@ -163,7 +163,7 @@ export function MarketsPage() {
               <option value="cancelled">Cancelled</option>
             </select>
           </label>
-          <div>
+          <div className="field control-field">
             <span className="field-label">View</span>
             <div className="trade-toggle view-toggle">
               <button className={viewMode === 'compact' ? 'trade-toggle-active' : ''} type="button" onClick={() => setViewMode('compact')}>
@@ -292,13 +292,12 @@ function StandoutMarketCard({
         <div>
           <p className="eyebrow">Most active prediction</p>
           <h3>{market.question}</h3>
-          <p>Inspired by `main.png`: one standout chart that makes the current probability structure and option spread legible at a glance.</p>
         </div>
         <div className="standout-meta">
           <span className="position-chip">{index + 1} / {total}</span>
           <span className={`position-chip ${sentimentClass(market)}`}>{sentimentLabel(market)}</span>
-          {total > 1 ? <button className="ghost-button" type="button" onClick={onPrevious}>Previous slide</button> : null}
-          {total > 1 ? <button className="ghost-button" type="button" onClick={onNext}>Next slide</button> : null}
+          {total > 1 ? <button className="ghost-button" type="button" onClick={onPrevious}>Previous</button> : null}
+          {total > 1 ? <button className="ghost-button" type="button" onClick={onNext}>Next</button> : null}
           <Link className="secondary-button" to={`/markets/${market.id}`}>Open market</Link>
         </div>
       </div>
@@ -321,7 +320,7 @@ function StandoutMarketCard({
             market={market}
             standout
             title="Most active prediction"
-            copy="Inspired by `main.png`: a single standout chart showing the full option spread over time."
+            copy=""
           />
         </div>
       </div>
