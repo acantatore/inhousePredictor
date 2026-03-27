@@ -137,6 +137,17 @@ Expected local endpoints:
 - never log plaintext passwords
 - never log secrets
 
+### Launch-Critical Coverage
+
+Before launch, operators must be able to inspect:
+
+- auth failures by reason class
+- trade and sell failures by outcome class
+- payout executions, skips, and failures
+- dispute review actions and failures
+- startup, migration, and bootstrap-admin failures
+- WebSocket auth, origin, and broadcast failures
+
 ---
 
 ## Graceful Shutdown
@@ -168,6 +179,22 @@ Before first users, monitor at least:
 - payout attempts
 - dispute actions once implemented
 - WS connection failures and origin/auth rejections
+
+### Minimum Viable Ops Package
+
+- one dashboard covering auth, trade/sell, payout, disputes, startup, and WebSocket health
+- one alert per launch-critical flow family
+- six runbooks: auth, trade/sell, payout, dispute review, startup/migrations, and WebSocket/auth failures
+- one completed rehearsal record for deploy + verify + rollback
+
+### Alerting Baseline
+
+- auth outage or sustained auth failure spike
+- repeated trade or sell failures, including elevated market-busy rates
+- payout failure
+- dispute review action failure
+- startup or migration failure
+- abnormal WebSocket auth/origin rejection or broadcast failure rates
 
 ---
 
@@ -201,13 +228,30 @@ Before first users, monitor at least:
 - document migration rollback expectations or compensating actions
 - ensure payout and market-state changes are considered when evaluating rollback safety
 
+### Launch Rollback Questions
+
+Every release candidate must answer:
+
+- what code change is reverted first?
+- what data-sensitive behavior remains risky after code rollback?
+- what operator communication is required if balances, disputes, or payouts are affected?
+
 ---
 
 ## Deployment Notes
 
 - CI/CD does not exist yet
 - backend deployment remains the primary runtime concern today
-- frontend build output exists, but production frontend deployment is still undocumented
+- frontend build output exists, but production frontend deployment still needs explicit launch docs
+
+### Production Deployment Requirements
+
+Before launch, document:
+
+- backend deployment steps
+- frontend deployment steps
+- routing expectations for frontend routes versus `/api`
+- version bump expectations tied to `VERSION` and `CHANGELOG.md`
 
 ---
 
@@ -226,5 +270,19 @@ Before first users, monitor at least:
 - JWT secret is set securely
 - WS auth and origin policy are configured
 - logs are structured and reviewable
+- dashboard and alert set exist for launch-critical flows
+- six runbooks exist and are reachable by the team
 - backup and restore process is documented
 - rollback expectations are documented
+- launch rehearsal record exists for the current release candidate
+
+---
+
+## Launch Rehearsal Expectations
+
+The rehearsal should prove that the team can:
+
+- deploy through the intended production-like path
+- verify auth, trade, sell, resolve, dispute, admin dispute review, and WebSocket behavior
+- inspect at least one expected success-path signal and one expected failure-path signal
+- execute rollback and confirm the prior known-good state is restored

@@ -1,4 +1,4 @@
-# InhousePredictor Implementation Plan
+# InhousePredictor Launch Readiness Plan
 
 > Last updated: 2026-03-27
 
@@ -6,488 +6,527 @@
 
 ## Goal
 
-Ship a launch-ready internal prediction market product that is safe, trustworthy, and usable by normal employees.
+Ship InhousePredictor to first internal users as a trustworthy, operable, and supportable prediction market product.
 
-This plan assumes the current backend and frontend foundations exist, and several launch-readiness issues identified in `ARCHITECTURE.md` and `TODOS.md` must still be verified or hardened before first users.
-
----
-
-## Planning Principles
-
-- trust and correctness before polish
-- enforce governance rules in the backend, not just the UI
-- stabilize the API contract before building most frontend flows
-- treat launch blockers as real blockers, not cleanup
-- use documentation, tests, and operations work as part of product delivery
+This is no longer a greenfield build plan. The product already has a working backend, a shipped frontend foundation, buy and sell support, disputes, tests, and release docs. The remaining work is about turning a real but uneven system into something the team can safely launch, monitor, and debug.
 
 ---
 
-## Current State
+## Current System Snapshot
 
-- backend API exists for auth, markets, trading, positions, resolution, and disputes
-- WebSocket price updates exist
-- frontend foundation exists with core market, trading, and portfolio flows
-- several release-hardening and polish items remain unresolved
-- unit and integration tests exist for critical backend flows
-- no CI/CD pipeline exists yet
+Already shipped:
 
----
+- auth, markets, trading, positions, resolution, disputes, and admin dispute review APIs
+- React frontend with market browsing, market detail, trade ticket, portfolio, and create market flows
+- buy and sell support, with sell requests currently constrained to whole-share amounts
+- authenticated, origin-checked WebSocket updates
+- startup migrations, bootstrap-admin support, structured logging, and graceful shutdown
+- unit and integration coverage for core backend behavior
+- release-management basics: `VERSION`, `CHANGELOG.md`, `CONTRIBUTING.md`
 
-## What Already Exists
+Still launch-critical:
 
-The implementation plan should reuse existing design decisions rather than inventing a second product definition.
-
-Existing design assets already locked in:
-
-- `DESIGN.md` navigation model for desktop and mobile
-- `DESIGN.md` information architecture for app shell and core screens
-- `DESIGN.md` screen blueprints for Markets, Market Detail, Portfolio, Create Market, Resolve Market, Dispute Submission, and Admin Disputes
-- `DESIGN.md` component vocabulary including `Market Row`, `Trade Ticket`, `Deadline Block`, `Evidence Card`, `Dispute Banner`, and `Performance Stat`
-- `DESIGN.md` interaction state matrix, responsive behavior, and accessibility requirements
-- `COPY_GUIDE.md` tone, action labels, error language, and empty-state rules
-
-Implementation should extend these patterns, not replace them.
+- route and API namespace cleanup so production routing is unambiguous
+- explicit trust contracts for trading, payout, resolution, and disputes
+- day-1 observability and runbook coverage for trust-sensitive flows
+- deployment and rollback rules strong enough for a real first-user launch
+- release gates with proof, not just intentions
 
 ---
 
-## Not In Scope
+## What This Plan Is Optimizing For
 
-The following design work is explicitly not part of this implementation plan:
-
-- public marketing pages, launch pages, or growth-site work
-- a generic enterprise admin console
-- advanced charting or analytics-first market views
-- tournament, leaderboard, or social-feed mechanics
-- final brand assets, illustration system, or marketing-style hero art
-
-These are intentionally deferred so the team can focus on a trustworthy internal forecasting product.
+- trust before feature count
+- launch clarity before roadmap breadth
+- explicit contracts before more frontend polish
+- observability before optimism
+- rollback posture before launch confidence
 
 ---
 
-## Information Architecture Execution Rules
+## Not In Scope For This Launch Plan
 
-Implementation must preserve the screen hierarchy already established in `DESIGN.md`.
+- public marketing site or growth-site work
+- generic enterprise admin expansion beyond the focused dispute workflow
+- advanced charting or analytics-heavy views
+- tournaments, leaderboards, or social-feed mechanics
+- fractional-share sell support
+- final brand system or marketing art direction
 
-### Markets
-
-Users should notice, in order:
-
-1. what needs attention now
-2. what the crowd currently thinks
-3. whether they already have a stake
-
-Execution implications:
-
-- `Closing Soon` must appear before general open markets
-- probability, deadline, and user-position cues must be scannable in one row
-- the team-context explanation should orient first-time users without pushing markets below the fold unnecessarily
-
-### Market Detail
-
-Users should notice, in order:
-
-1. what the market is asking
-2. whether action is still available
-3. what the current crowd signal is
-4. why the eventual outcome can be trusted
-5. what the user can do right now
-
-Execution implications:
-
-- trade panel cannot dominate the page before the market question and timing context are clear
-- resolver identity, evidence, and dispute state are trust elements, not footer metadata
-- disabled trading states must become explanation surfaces, not dead forms
-
-### Portfolio
-
-Users should notice, in order:
-
-1. how they are doing overall
-2. which predictions are still unresolved
-3. what resolved recently
-
-Execution implications:
-
-- summary stats lead the page
-- unresolved holdings are prioritized above historical detail
-- copy and visuals should acknowledge sell support without drifting into trader-style live-PnL framing
+These remain valid future bets, but they do not make first-user launch safer.
 
 ---
 
-## Anti-Generic UI Guardrails
+## Launch Definition
 
-The frontend implementation should not fall back to generic SaaS dashboard patterns just because they are easy to assemble.
+InhousePredictor is ready for first internal users only when all of the following are true:
 
-Avoid:
+- trust-sensitive product rules are explicitly documented and match code behavior
+- core user flows have named, tested failure behavior rather than fallback ambiguity
+- the team can detect, investigate, and respond to failures in auth, trading, payout, disputes, startup, and WebSocket delivery
+- deployment and rollback steps are documented and realistic
+- release gates have owners and proof artifacts
 
-- interchangeable card-grid dashboards where all content competes equally
-- oversized marketing-style hero treatments inside the product shell
-- finance-terminal styling, ticker behavior, or noisy real-time animations
-- empty states that read like placeholders
-- visual hierarchy that makes controls louder than the market question or trust signals
-
-Prefer:
-
-- structured lists and rows that support fast scanning
-- sectioning that emphasizes timing, probability, and trust
-- calm, editorial-feeling layouts instead of widget collections
-- action areas that feel grounded in explanation, not conversion pressure
-- trust surfaces such as resolver identity, evidence, and dispute state treated as core content
-
-Implementation rules:
-
-- the Markets page should feel like a forecasting workspace, not a dashboard of unrelated widgets
-- Market Detail should prioritize the market question and timing context before trade mechanics
-- Portfolio should feel reflective and performance-oriented, not like a brokerage account
-- Admin Disputes should stay narrow and task-focused rather than expanding into a control-center layout
-- if a UI pattern is not already supported by `DESIGN.md` component vocabulary, it should justify itself before being introduced
+If any one of those is missing, the product may still be demo-ready, but it is not launch-ready.
 
 ---
 
-## Phase 0 - Product Contract Lock
+## Launch Control
 
-### Goal
+This section exists to answer one question: how does the team know it is safe to ship?
 
-Lock the product and engineering contract before major implementation begins.
+### Release Gates
 
-### Work
+| Gate | What must be true | Owner | Proof |
+|---|---|---|---|
+| Access gate | Auth and market creation behavior are frozen for launch, including validation, authorization, and safe failure behavior | Eng | `API.md` + integration coverage |
+| Product trust gate | Trading, sell, resolve, dispute, and payout behavior match documented rules | Product + Eng | updated docs + reviewed state machines |
+| API contract gate | All launch-critical endpoints are frozen for launch: auth, markets, trade, positions, resolve, dispute, admin dispute review, and WebSocket auth/origin behavior | Eng | `API.md` + integration coverage |
+| UX state gate | Core screens handle loading, empty, disabled, success, partial, and failure states intentionally, including portfolio valuation language and sell-state messaging | Frontend | QA checklist + manual verification |
+| Operations gate | Logs, metrics, alerts, and runbooks exist for launch-critical flows | Eng + Ops | ops matrix + alert list + runbook references |
+| Deployment gate | Production deployment and rollback steps are documented and tested in a realistic environment | Eng | release checklist + rollback walkthrough |
 
-- finalize product, design, and architecture docs
-- create operational docs for API, data model, QA, security, and operations
-- lock creator trading policy as not allowed
-- define target response and error conventions for API work
+### Terms Used In This Plan
 
-### Exit Criteria
+- `launch-critical` means any flow that can block access, change balances, change market state, affect payouts, or undermine user trust if it fails silently
+- `partial state` means the primary screen loads but one supporting surface, live update, or secondary summary is delayed or missing
+- `realistic environment` means a deployment path close enough to production to verify routing, auth, startup, WebSocket behavior, logging, and rollback steps without hand-waving
 
-- required planning docs exist
-- major trust and policy decisions are written down
-- frontend and backend teams can build from the same contract
+### Ship / No-Ship Criteria
 
----
+Ship only if:
 
-## Phase 1 - Backend Launch Blockers
+- no unresolved P1 items remain in `TODOS.md`
+- no trust-sensitive flow has undocumented or contradictory behavior
+- no launch-critical route depends on backward-compatibility hacks that are not intentional
+- no launch-critical failure path is invisible to operators
 
-### Goal
+Do not ship if:
 
-Remove correctness and trust issues that would break the product for first users.
+- trading, payout, or dispute behavior depends on “we think this is fine” rather than test coverage or explicit manual verification
+- rollback requires improvisation
+- the team cannot explain what happens on a failed trade, failed resolution, failed dispute review, or startup migration failure
 
-### Required Work
+### Final Ship Authority
 
-- enforce `closes_at` in the trade execution path
-- make payout idempotent
-- enforce dispute deadline server-side
-- detect serialization failures, retry safely, then return a clean busy response
-- remove stored `k` and compute invariant inline
-- map duplicate email to a safe conflict response
-- add shared JSON error/response layer
-- lock dispute state transitions and payout interaction rules before admin UI work begins
+If gate owners disagree, final ship authority belongs to the engineering lead and product owner together.
 
-### Dependencies
+Rules:
 
-- schema changes for payout tracking and pool cleanup
-- agreement on target error contract
-- agreement on allowed dispute outcomes and whether payout is deferred, confirmed, or overridden during dispute handling
+- either can block launch if a launch gate is not met
+- disagreement defaults to no-ship until the blocking gate is resolved or explicitly waived in writing
+- any waived gate must be recorded in the release checklist with owner, reason, and follow-up action
 
-### Exit Criteria
+### Required Pre-Launch Proof
 
-- critical trading, payout, and dispute bugs are fixed
-- API no longer leaks raw DB errors in core flows
-- backend behavior matches documented policy rules
+- `go test ./...`
+- frontend production build succeeds
+- manual verification of auth, trade, sell, resolve, dispute, admin dispute review, and portfolio flows
+- launch checklist in `QA.md` completed against the latest branch state
 
----
+### Frontend Launch Baseline
 
-## Phase 2 - Platform And Operational Readiness
+Frontend is launch-ready only if all of the following are true:
 
-### Goal
+- production build succeeds
+- launch-critical screens pass the manual QA checklist in `QA.md`
+- no debug-only logging or placeholder messaging remains in user-facing flows
+- disabled, empty, partial, stale, and retry states are verified for auth, markets, trade, sell, portfolio, create, resolve, and dispute flows
 
-Make the backend operable as a normal application, not a fragile local-only setup.
+### Rollback Standard
 
-### Required Work
+For every launch candidate, the team must be able to answer:
 
-- embed and run migrations on startup
-- add `BOOTSTRAP_ADMIN_EMAIL` flow for first admin creation
-- add graceful shutdown handling for HTTP and WebSocket traffic
-- add structured logging with `slog`
-- document environment variables and runtime expectations
-
-### Dependencies
-
-- migration runner choice
-- startup configuration contract
-
-### Exit Criteria
-
-- the app can boot consistently in a new environment
-- first admin creation does not require raw DB edits
-- logs are useful for launch debugging and incident handling
+- what code change would be reverted first?
+- what migration or data change is irreversible?
+- what user-facing behavior would remain degraded even after a code rollback?
+- what communication is needed if disputes, payouts, or balances are affected?
 
 ---
 
-## Phase 3 - Auth, WebSocket, And Security Hardening
+## Trust Contracts
 
-### Goal
+The product does not earn trust by having code. It earns trust by having explicit, stable rules that backend, frontend, QA, and docs all agree on.
 
-Bring security boundaries in line with an internal company product.
+### Trading Contract
 
-### Required Work
+```text
+OPEN MARKET
+  |
+  | buy / sell request
+  v
+VALIDATE REQUEST
+  |- invalid input ----------> validation error
+  |- creator restricted -----> forbidden / conflict response
+  |- insufficient funds -----> insufficient balance error
+  |- insufficient shares ----> validation / conflict response
+  |- market closed ----------> market_closed error
+  |- market busy ------------> market_busy error
+  v
+EXECUTE TRADE
+  |- success ----------------> balance + position + pool update + WS broadcast
+  |- serialization failure --> retry path, then market_busy
+  |- unexpected failure -----> internal_error + operator-visible logs
+```
 
-- require authentication for WebSocket connections
-- enforce an approved origin allowlist for WebSocket upgrades
-- verify resolver-only and admin-only server-side authorization paths
-- tighten validation for passwords, URLs, question length, and timing rules
-- define bounded market-list query behavior for launch routes so the default Markets screen does not depend on unbounded result sets
+Launch contract:
 
-### Dependencies
+- buy requests are spend-first
+- sell requests are whole-share only under the current API contract
+- user-visible disabled states must match server-enforced restrictions
+- no frontend rule may exist without matching backend enforcement
 
-- shared auth middleware conventions
-- shared error contract
+### Resolution / Dispute / Payout Contract
 
-### Exit Criteria
+```text
+OPEN
+  |
+  | resolve by assigned resolver
+  v
+RESOLVED
+  |- evidence missing --------> invalid request
+  |- resolver unauthorized ---> forbidden
+  |- payout pending ----------> payout path must remain idempotent
+  v
+DISPUTE WINDOW ACTIVE
+  |- dispute submitted -------> DISPUTED
+  |- deadline passes ---------> payout finality remains valid
+  v
+DISPUTED
+  |- admin confirms outcome --> payout finalized once
+  |- admin overrides outcome -> payout finalized once
+  |- admin cancels market ----> refund / cancellation contract applies
+```
 
-- WS access matches documented auth boundary
-- validation failures are explicit and safe
-- trust-sensitive authorization rules are enforced consistently
+Launch contract:
 
----
+- every dispute action must produce a named terminal state
+- payout must remain idempotent under repeated triggers
+- user-visible dispute state must explain what happens next
+- cancelled and disputed edge cases cannot rely on operator tribal knowledge
 
-## Phase 4 - Backend Test Coverage
+### Contract Freeze Points
 
-### Goal
+Before launch, freeze these behaviors explicitly in docs and tests:
 
-Create the minimum automated confidence required for launch.
-
-### Required Work
-
-- add CPMM unit tests
-- add integration tests with real Postgres via testcontainers-go
-- cover market creation, trade execution, payout behavior, deadline enforcement, and auth rules
-- add concurrency coverage for serialization retry behavior
-- add WS handshake and subscription tests
-- add startup and operational-path tests for migrations, bootstrap-admin behavior, and launch-critical runtime checks
-
-### Exit Criteria
-
-- critical business rules are covered by automated tests
-- regressions in payout, deadline, or authorization behavior are caught automatically
-- startup and launch-path regressions are caught before release instead of during deploy
-
----
-
-## Phase 4.5 - V1 API Contract Freeze
-
-### Goal
-
-Freeze the user-facing backend contract before real frontend integration begins.
-
-### Required Work
-
-- lock request and response shapes for auth, markets, market detail, trade, positions, resolve, dispute, and admin dispute surfaces
-- lock standardized error responses for validation, auth, not-found, conflict, busy, closed, and unauthorized states
-- lock creator-trading restriction behavior and message contract
-- lock WS authentication and origin requirements for launch-ready environments
-- verify frontend-critical contract paths in integration tests
-
-### Exit Criteria
-
-- frontend work no longer depends on temporary backend semantics
-- user-facing error and state handling can be implemented once instead of reworked repeatedly
-- the API contract documented in `API.md` is the implementation target for Phase 5 onward
-
----
-
-## Phase 5 - Frontend Foundation
-
-### Goal
-
-Create the first usable product shell aligned with `DESIGN.md`.
-
-### Required Work
-
-- build app shell and navigation model
-- implement login and registration flows
-- build Markets home with `Closing Soon`, `Open`, and `Recently Resolved`
-- build market list filters and row modes
-- implement market detail layout and trade panel
-
-### Dependencies
-
-- frozen v1 API contract for all user-facing surfaces
-- stable error responses
-- documented copy and flow expectations
-
-### Exit Criteria
-
-- a user can authenticate, browse markets, and inspect a market detail page
-- the UI reflects the intended warm, trustworthy product tone
+- request / response shapes for auth, markets, trade, positions, resolve, dispute, admin dispute review, and launch-ready WebSocket access
+- auth validation and login failure behavior
+- market creation validation, liquidity debit rules, and creator restriction behavior
+- sell semantics and whole-share constraint
+- standardized error shapes for validation, auth, not-found, conflict, busy, closed, and unauthorized states
+- dispute review actions and terminal outcomes
+- portfolio presentation rules that avoid trader-style live-PnL framing
 
 ---
 
-## Phase 6 - Core User Flows
+## Day-1 Operations
 
-### Goal
+If something breaks after launch, the first question should not be “where do we even look?”
 
-Deliver the full employee and resolver experience for v1.
+### Observability Matrix
 
-### Required Work
+| Flow | Must log | Must measure | Must alert on |
+|---|---|---|---|
+| Auth | login failure reason class, registration failure class | auth failure rate | sustained auth spike or login outage |
+| Trade / Sell | market id, user id, side, request outcome, failure class | trade success vs failure rate, busy rate | repeated trade failures, elevated busy rate |
+| Resolution | resolver id, market id, outcome path, failure class | resolution success/failure | repeated resolution failures |
+| Dispute review | admin actor, market id, action, result | dispute action count, failure count | failed admin dispute actions |
+| Payout | market id, trigger, idempotent skip vs execute | payout executions, payout skips, payout failures | payout failure |
+| Startup | migration result, bootstrap-admin result, listen result | startup success/failure | migration or boot failure |
+| WebSocket | auth reject, origin reject, subscription count, drop count | connection count, rejection count, client drop count | auth/origin rejection anomalies or broadcast failures |
 
-- implement buy YES / buy NO flow
-- implement portfolio surfaces
-- implement create market flow
-- implement resolver-only resolution flow
-- implement dispute submission flow
-- handle all loading, empty, disabled, success, and error states intentionally
+### Minimum Runbooks
 
-### Dependencies
+Before launch, write operator responses for:
 
-- backend launch blockers fixed
-- design and copy rules locked
+- migration failure on startup
+- trade path returning unexpected internal errors
+- elevated serialization / busy errors
+- payout failure or duplicate-trigger concern
+- dispute action failure
+- WebSocket auth or origin failures after deploy
 
-### Exit Criteria
+### Required Operations Artifacts
 
-- a normal employee can complete every core v1 flow without manual support
-- a resolver can resolve with evidence
-- a user can file a dispute during the valid window
+- an ops matrix stored in `OPERATIONS.md` or a linked runbook doc
+- an alert list covering auth, trade, payout, dispute, startup, and WebSocket failures
+- at least one deploy/rollback rehearsal record tied to the current release candidate
 
----
+### Minimum Viable Ops Package
 
-## Interaction State Coverage Required Before Launch
+Before launch, the team must have at least:
 
-The following states are part of the feature definition, not optional polish.
+- logs for every launch-critical flow
+- one dashboard covering auth, trade, payout, dispute, startup, and WebSocket health
+- one alert per launch-critical flow family
+- six runbooks: auth, trade/sell, payout, dispute review, startup/migrations, WebSocket/auth failures
+- one completed rehearsal record for deploy + verify + rollback
 
-| Surface | Loading | Empty | Error | Success | Partial / Live |
-|---|---|---|---|---|---|
-| Auth | disabled submit with inline progress | n/a | invalid credentials, duplicate email, validation guidance | logged in or account created | retained form input after recoverable error |
-| Markets | skeleton rows and filters | explain what markets are, CTA to create | failed to load markets | filter or view mode applied | stale prices or disconnected live feed |
-| Market Detail | skeleton header and trade panel | n/a | missing market, unauthorized, busy, closed-state explanation | trade placed, dispute filed, resolution shown | content loaded while activity or live data is delayed |
-| Portfolio | skeleton stat blocks and rows | no positions yet, CTA to explore markets | failed to load portfolio | n/a | some metrics loaded before detailed rows |
-| Create Market | disabled submit while validating | n/a | inline validation and submit failure | market created | local draft-like state preserved after recoverable error |
-| Resolve Market | disabled submit | n/a | invalid evidence, unauthorized, invalid market state | resolution recorded | confirmation visible while downstream market data refreshes |
-| Dispute Submission | disabled submit | dispute unavailable because market is not eligible | validation failure, deadline closed, unauthorized | dispute submitted with next-step explanation | market page refresh lag after submit |
-| Admin Disputes | skeleton queue | no disputes to review | queue failed to load, action failed | dispute action completed | queue data refreshing or stale |
+Alerting baseline:
 
-Implementation rules:
+- one failure alert per launch-critical flow family
+- one startup alert for boot or migration failure
+- one anomaly alert for elevated trade busy / failure rates
 
-- empty states must include warmth, context, and one clear next action
-- disabled states must explain why action is unavailable
-- partial and live-update states must degrade gracefully without hiding core content
-- success states should confirm what changed without sounding like a trading app
+### Day-1 Dashboard Questions
 
-Phase ownership:
+The first dashboard set should let the team answer:
 
-- Phase 5 must deliver auth, markets, and market-detail loading, empty, and error states
-- Phase 6 must deliver trade, portfolio, create, resolve, and dispute state coverage
-- Phase 7 must deliver admin dispute queue state coverage
-- Phase 8 must verify all states against `QA.md` before launch signoff
+- are users successfully logging in?
+- are trades and sells succeeding at normal rates?
+- are busy/conflict errors spiking?
+- are dispute actions completing?
+- did the app start cleanly after the last deploy?
 
----
+### Debuggability Standard
 
-## Phase 7 - Admin Dispute Workflow
-
-### Goal
-
-Add the focused admin capability needed to operate the product responsibly.
-
-### Required Work
-
-- define dispute queue API and UI
-- implement admin review actions
-- persist dispute review actor and timestamps
-- document final dispute lifecycle once implementation is locked
-- add integration coverage for the dispute workflow
-
-### Dependencies
-
-- payout idempotency fix
-- shared error contract
-- auth and role enforcement
-
-### Exit Criteria
-
-- disputed markets can be reviewed and completed inside the product
-- admins no longer need manual DB work for dispute handling
+Three weeks after launch, an engineer should be able to reconstruct a failed trade, failed dispute action, or failed startup from logs and metrics alone.
 
 ---
 
-## Phase 8 - Launch Readiness
+## Remaining Workstreams
 
-### Goal
+### Workstream 1 - Routing And Contract Cleanup
 
-Confirm the system is ready for first internal users.
+DRI:
 
-### Required Work
+- Eng lead
 
-- run the release checklist from `QA.md`
-- verify operations runbook steps
-- verify bootstrap admin path
-- verify authenticated WS behavior in a realistic environment
-- review docs for implementation drift
+Delivery target:
 
-### Exit Criteria
+- before launch rehearsal
 
-- release gates pass
-- no unresolved P1 items remain
-- core docs match shipped behavior
+Goal:
+
+- make production routing and API boundaries explicit rather than transitional
+
+Dependency note:
+
+- routing and API boundary decisions are prerequisite input to the final contract freeze
+
+Required work:
+
+- publish a routing matrix that shows supported root routes, `/api` routes, frontend routes, and proxy assumptions
+- decide whether root-route compatibility stays or is removed before launch, then document the decision in `API.md` and `OPERATIONS.md`
+- remove route ambiguity from the release checklist
+
+Exit criteria:
+
+- the team can explain exactly which routes are public, authenticated, proxied, and production-supported
+
+### Workstream 2 - Trust-Sensitive Rule Lock
+
+DRI:
+
+- Product + backend lead
+
+Delivery target:
+
+- before API contract freeze signoff
+
+Goal:
+
+- turn implied trading, payout, and dispute rules into explicit launch contracts
+
+Required work:
+
+- add final dispute lifecycle and terminal states to `API.md` and `ARCHITECTURE.md`
+- freeze sell semantics in docs and tests until fractional sells are intentionally designed
+- map user-visible failure behavior to backend error codes for launch-critical flows
+
+Exit criteria:
+
+- no trust-sensitive flow depends on contradictory docs or inferred frontend behavior
+
+### Workstream 3 - UX State Hardening
+
+DRI:
+
+- Frontend lead
+
+Delivery target:
+
+- before final manual QA pass
+
+Goal:
+
+- make the shipped frontend explain failure and in-between states as intentionally as success states
+
+Required work:
+
+- verify disabled, empty, partial, stale, and retry states on auth, markets, trade, sell, portfolio, create, resolve, and dispute flows using the `QA.md` checklist
+- confirm portfolio language stays calm and trustworthy even with sell support
+- remove any leftover debug-only behavior or ambiguous UI feedback before release cut
+
+Exit criteria:
+
+- a first-time internal user can always tell what happened, what failed, and what to do next
+
+### Workstream 4 - Verification And Release Gating
+
+DRI:
+
+- Eng lead + QA owner
+
+Delivery target:
+
+- before release candidate signoff
+
+Goal:
+
+- make launch confidence come from proof, not optimism
+
+Required work:
+
+- map each release gate to an owner and verification artifact in this plan or a linked checklist
+- keep `go test ./...` as the minimum automated backend shipping baseline
+- define the frontend shipping baseline explicitly: production build plus manual QA checklist for launch-critical flows
+- add any missing manual verification steps required by shipped sell behavior and dispute review behavior
+
+Exit criteria:
+
+- every launch gate has a human owner and a concrete proof artifact
+
+### Workstream 5 - Deployment And Rollback Readiness
+
+DRI:
+
+- Eng lead + ops owner
+
+Delivery target:
+
+- before launch rehearsal
+
+Goal:
+
+- ensure launch is reversible and production behavior is knowable
+
+Required work:
+
+- document production deployment steps for backend and frontend in `OPERATIONS.md` or linked release docs
+- define version bump expectations tied to `VERSION` and `CHANGELOG.md`
+- document rollback expectations for code, routing, and data-sensitive failures
+- add a launch rehearsal checklist with participants, pass/fail criteria, and outputs
+
+Exit criteria:
+
+- the team can rehearse deploy + rollback without inventing steps live
 
 ---
 
-## Milestones
+## Sequencing
 
-### Milestone A - Safe backend core
+```text
+1. Lock launch control and trust contracts
+      |
+      v
+2. Resolve routing / API boundary ambiguity
+      |
+      v
+3. Harden UX states and launch-critical operator visibility
+      |
+      v
+4. Complete verification artifacts and release gates
+      |
+      v
+5. Run launch rehearsal, then ship to first internal users
+```
 
-Backend trust and correctness blockers are closed.
+Recommended order:
 
-### Milestone B - Operable platform
+1. route / API namespace decision as prerequisite input to contract freeze
+2. `Launch Control` and `Trust Contracts`
+3. Day-1 operations coverage
+4. UX state audit for launch-critical flows
+5. release rehearsal and final checklist
 
-Migrations, admin bootstrap, logging, and shutdown are in place.
+### Launch Rehearsal Checklist
 
-### Milestone C - Usable product shell
+Pass only if the team can complete all of the following without improvisation:
 
-Users can authenticate, browse markets, and open market detail.
+- deploy the release candidate through the intended production-like path
+- verify auth, trade, sell, resolve, dispute, admin dispute review, and WebSocket flows
+- inspect the expected logs, metrics, and alerts for at least one success path and one forced failure path
+- execute the rollback procedure and confirm the system returns to the prior known-good state
 
-### Milestone D - End-to-end v1 flows
+Required participants:
 
-Trade, portfolio, create, resolve, and dispute flows all work.
-
-### Milestone E - Governed launch
-
-Admin dispute handling, security hardening, QA, and operations checks are complete.
-
----
-
-## Dependencies And Sequencing
-
-- frontend work depends on a stable API contract and shared error model
-- dispute workflow depends on payout safety and authorization rules
-- launch depends on WS hardening, not just HTTP auth
-- QA automation depends on backend behavior stabilizing first
-- operations readiness depends on migration and bootstrap changes landing before deployment
-
----
-
-## Code Quality Guardrails
-
-- backend is the source of truth for business validation, authorization rules, and typed error semantics
-- frontend may mirror validation for usability, but must not become the only place a rule exists
-- shared response and error helpers should be reused across handlers instead of copied per route
-- UI state handling should consume documented error codes and states rather than infer backend behavior ad hoc
-- implementation should prefer extending existing market, trade, auth, and ws modules over inventing parallel orchestration layers without a clear boundary
-
----
-
-## Major Risks
-
-- backend bugs may leak into the first frontend if Phase 1 is rushed
-- open dispute lifecycle questions may delay admin flow implementation
-- lack of validation could create poor data quality or broken UX
-- unauthenticated WS access could undermine the internal-only product posture
-- no tests means regressions in core market logic would be hard to detect
+- engineering owner
+- frontend or product owner
+- whoever will own day-1 operations or incident response
 
 ---
 
-## Nice-To-Have Work After Launch Readiness
+## Artifact Owners
+
+| Artifact | Owner | Needed before |
+|---|---|---|
+| `API.md` launch contract updates | backend lead | API contract gate signoff |
+| `OPERATIONS.md` ops matrix and deployment notes | eng lead + ops owner | launch rehearsal |
+| `QA.md` launch checklist and frontend manual baseline | QA owner + frontend lead | release candidate signoff |
+| trust state machines in docs | product + backend lead | product trust gate |
+| portfolio valuation / PnL presentation rules | frontend lead + product owner | UX state gate |
+| rehearsal record | eng lead | final ship decision |
+
+---
+
+## Weekly Execution Table
+
+| Workstream | Immediate blocker | Owner | Due before |
+|---|---|---|---|
+| Routing And Contract Cleanup | route compatibility decision | Eng lead | API contract freeze |
+| Trust-Sensitive Rule Lock | final dispute lifecycle wording | Product + backend lead | trust gate signoff |
+| UX State Hardening | launch-critical state audit complete | Frontend lead | final manual QA pass |
+| Verification And Release Gating | release artifacts mapped to owners | Eng lead + QA owner | release candidate signoff |
+| Deployment And Rollback Readiness | deployment + rollback steps documented | Eng lead + ops owner | launch rehearsal |
+
+### Weekly Operating Cadence
+
+- Monday: update workstream status, blockers, and artifact ownership
+- Wednesday: resolve cross-doc contradictions and contract drift
+- Friday: review gate status and decide whether the branch is closer to rehearsal or blocked
+
+---
+
+## Risks That Matter Most
+
+- the team keeps treating the system as “almost there” and launches without explicit trust contracts
+- routing ambiguity creates subtle production bugs or deployment confusion
+- sell support exists in code and UI but remains under-specified in edge cases
+- dispute and payout handling remain understandable only to current maintainers
+- deployment succeeds but post-launch debugging is too weak to respond confidently
+
+---
+
+## Nice-To-Have After Launch Readiness
 
 - fractional-share sell support
 - calibration scores
 - seasonal tournaments
 - market archival
 - expanded admin and audit tooling
+
+---
+
+## Source Documents This Plan Depends On
+
+- `README.md`
+- `API.md`
+- `ARCHITECTURE.md`
+- `DESIGN.md`
+- `USER_FLOWS.md`
+- `QA.md`
+- `OPERATIONS.md`
+- `TODOS.md`
+- `CHANGELOG.md`
+
+If any of those documents disagree with this plan, the disagreement should be resolved before launch rather than tolerated.
+
+---
+
+## Locked Decisions From CEO Review
+
+- auth and market-creation contracts are launch-critical and explicitly part of the release-gate model
+- final ship authority is shared by the engineering lead and product owner; disagreement defaults to no-ship
+- portfolio valuation and PnL presentation are frozen as part of the UX state gate and artifact ownership model
+- progress is tracked through a weekly operating cadence rather than vague relative timing alone

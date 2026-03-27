@@ -22,6 +22,17 @@ Because the system handles balances, market outcomes, and trust-sensitive govern
 
 ---
 
+## Launch Gates Supported By QA
+
+QA provides proof for these launch gates from `PLAN.md`:
+
+- Access gate - auth and market creation work with explicit validation and safe failures
+- Product trust gate - trade, sell, resolve, dispute, and payout behavior match the documented contract
+- UX state gate - launch-critical screens handle loading, empty, disabled, success, partial, stale, and failure states intentionally
+- Deployment gate - launch rehearsal verifies core flows after deploy and after rollback
+
+---
+
 ## Test Layers
 
 ### Unit Tests
@@ -67,6 +78,7 @@ Primary target:
 Required coverage:
 
 - auth failure shape
+- market creation validation failure shape
 - validation failure shape
 - busy market shape
 - not found shape
@@ -131,11 +143,19 @@ These are mandatory pass scenarios before first internal users.
 - admin-only and resolver-only routes enforce authorization correctly
 - WebSocket requires auth and approved origin before launch
 
+### Access And Market Creation Safety
+
+- registration validation fails safely and clearly
+- login failure remains explicit and non-leaky
+- market creation rejects invalid timing and invalid resolver selection
+- initial liquidity debit happens exactly once on successful market creation
+
 ### User Experience Baseline
 
 - empty states include context and next action
 - disabled actions explain why they are unavailable
 - success and error feedback is visible in the relevant flow
+- portfolio language avoids trader-style live PnL framing even with sell support
 
 ---
 
@@ -196,6 +216,7 @@ These are mandatory pass scenarios before first internal users.
 
 ## Release Checklist
 
+- access gate scenarios pass for auth and market creation
 - CPMM unit tests exist and pass
 - integration tests exist and pass
 - critical auth and role checks are covered
@@ -204,6 +225,31 @@ These are mandatory pass scenarios before first internal users.
 - WS auth and origin restrictions are verified
 - API error shapes are consistent in core flows
 - local startup and migration flow are documented and verified
+- frontend launch baseline is verified for auth, markets, trade, sell, portfolio, create, resolve, and dispute flows
+- launch rehearsal verifies deploy, core flows, observability checks, and rollback
+
+---
+
+## Frontend Launch Baseline
+
+Before launch, manually verify all of the following on the release candidate:
+
+- auth: loading, invalid credentials, duplicate email, retained input after recoverable failure
+- markets: empty state, filters, stale/live update degradation, load failure
+- trade and sell: disabled states, market closed, insufficient balance, insufficient shares, busy state, success feedback
+- portfolio: no positions state, partial data behavior, calm valuation language, resolved vs unresolved sections
+- create market: inline validation, insufficient balance, timing validation, success path
+- resolve and dispute: invalid evidence, deadline closed, unauthorized, success confirmation
+
+---
+
+## Launch Rehearsal QA
+
+The release candidate passes rehearsal only if QA can confirm:
+
+- the deployed build supports auth, trade, sell, resolve, dispute, admin dispute review, and WebSocket flows
+- at least one expected success-path signal and one expected failure-path signal are visible in logs or dashboards
+- rollback returns the prior known-good behavior for launch-critical flows
 
 ---
 

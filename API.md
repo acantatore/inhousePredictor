@@ -21,6 +21,21 @@ It is based on the current backend in `ARCHITECTURE.md`, with launch-required ad
 
 ---
 
+## Launch-Critical Contract Scope
+
+The launch-readiness plan treats these contracts as frozen before first internal users:
+
+- auth: registration, login, `/me`, and auth failure behavior
+- markets: list, create, and detail responses needed by the frontend
+- trade and sell: request semantics, failure codes, and balance / position effects
+- resolution, disputes, and admin dispute review
+- positions and portfolio-supporting responses
+- WebSocket authentication, origin rules, and price update message shape
+
+If behavior changes in any of those areas, `API.md`, `QA.md`, and the relevant implementation must be updated together.
+
+---
+
 ## Authentication
 
 ### Scheme
@@ -128,6 +143,11 @@ Create a new user.
 - `email_already_registered`
 - `validation_error`
 
+#### Launch Freeze Notes
+
+- registration validation is part of the launch-critical access contract
+- duplicate email and invalid input failures must remain explicit and non-leaky
+
 ### `POST /auth/login`
 
 Authenticate a user.
@@ -159,6 +179,11 @@ Authenticate a user.
 #### Target Errors
 
 - `invalid_credentials`
+
+#### Launch Freeze Notes
+
+- invalid credential behavior is part of the launch-critical access contract
+- auth failure responses must remain explicit and safe
 
 ---
 
@@ -224,6 +249,11 @@ Create a market.
 - `validation_error`
 - `insufficient_balance`
 - `unauthorized`
+
+#### Launch Freeze Notes
+
+- market creation validation, liquidity debit behavior, and creator restriction behavior are frozen for launch
+- invalid timing, invalid resolver selection, and insufficient balance failures must remain explicit
 
 ### `GET /markets/{id}`
 
@@ -403,6 +433,11 @@ Return the authenticated user's holdings across markets.
 - resolution state where relevant
 - enough context to render portfolio views
 
+#### Launch Freeze Notes
+
+- position responses must support portfolio language that avoids trader-style live PnL framing
+- sell-capable holdings must remain understandable without implying brokerage semantics
+
 ---
 
 ## WebSocket Protocol
@@ -544,4 +579,4 @@ GET /ws?market_id=<uuid>
 
 - market listing is bounded but does not yet expose cursor pagination
 - payout finalization is lazy after dispute deadline or admin review rather than background-job driven
-- no frontend is consuming this contract yet, so end-to-end UI/API compatibility is still pending
+- end-to-end UI/API compatibility still needs explicit launch verification against the release candidate
