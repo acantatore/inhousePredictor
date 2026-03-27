@@ -124,7 +124,7 @@ inhousePredictor/
 | user_id, market_id | UUID FK | |
 | side | ENUM | `yes \| no \| sell_yes \| sell_no` |
 | shares | DOUBLE PRECISION | Shares bought or sold |
-| cost | BIGINT | Buy points spent or whole shares requested for sell orders |
+| cost | BIGINT | Buy points spent; sell ledger stores negative point proceeds (request share count is separate input semantics) |
 | yes_price_before | DOUBLE PRECISION | Implied prob before trade |
 | yes_price_after | DOUBLE PRECISION | Implied prob after trade |
 | created_at | TIMESTAMPTZ | |

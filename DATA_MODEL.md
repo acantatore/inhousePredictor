@@ -117,7 +117,8 @@ Rules:
 
 - trade ledger is immutable
 - buy-side trade `cost` is integer points spent
-- sell-side trade `cost` is the whole-number share amount requested under the current API contract
+- sell requests use the API `cost` field as the whole-number share amount requested
+- persisted sell-side trade `cost` stores negative point proceeds in the ledger; the share amount sold is stored in `shares`
 - `shares` can be fractional
 - trades should only occur while market trading is open
 
@@ -180,14 +181,14 @@ Rules:
 
 - `yes`
 - `no`
-- `sell_yes`
-- `sell_no`
 - `cancelled`
 
 ### Trade Side
 
 - `yes`
 - `no`
+- `sell_yes`
+- `sell_no`
 
 ---
 

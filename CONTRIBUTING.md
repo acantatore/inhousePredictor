@@ -23,7 +23,7 @@ cd inhousePredictor
 cp .env.example .env
 ```
 
-2. Set at least `JWT_SECRET` in `.env`.
+2. Set at least `JWT_SECRET` in `.env`. The local Docker flow now reads `JWT_SECRET` from your shell or `.env` instead of always using a hardcoded compose value.
 
 3. Start Postgres and the API:
 
