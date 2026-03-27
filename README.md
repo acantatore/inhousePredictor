@@ -192,6 +192,9 @@ npm run dev -- --host 0.0.0.0
 
 - `ARCHITECTURE.md` - backend structure and system mechanics
 - `API.md` - request/response contract
+- `CHANGELOG.md` - release-facing change history
+- `CONTRIBUTING.md` - local setup and contribution workflow
+- `VERSION` - current project version label
 - `DATA_MODEL.md` - domain entities, invariants, and schema notes
 - `DESIGN.md` - product design system and screen blueprints
 - `USER_FLOWS.md` - core user journeys and UX expectations
